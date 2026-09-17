@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0c1f35" />
+    <title>DIEX INVEL | Gestión comercial</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" id="sidebar">
+        <div class="brand">
+          <div class="brand-mark">DI</div>
+          <div>
+            <strong>DIEX INVEL</strong>
+            <span>Gestión comercial</span>
+          </div>
+        </div>
+
+        <div class="workspace-switcher">
+          <span class="eyebrow">Empresa activa</span>
+          <button class="workspace-button" type="button">
+            <span><i class="status-dot"></i> DIEX INVEL</span>
+            <span class="chevron">⌄</span>
+          </button>
+        </div>
+
+        <nav class="main-nav" aria-label="Navegación principal">
+          <span class="nav-label">Operación</span>
+          <button class="nav-item active" data-section="dashboard" type="button"><span class="nav-icon">⌂</span> Resumen</button>
+          <button class="nav-item" data-section="sales" type="button"><span class="nav-icon">↗</span> Ventas</button>
+          <button class="nav-item" data-section="purchases" type="button"><span class="nav-icon">↙</span> Compras</button>
+          <button class="nav-item" data-section="inventory" type="button"><span class="nav-icon">▦</span> Inventario</button>
+
+          <span class="nav-label separated">Control</span>
+          <button class="nav-item" data-section="products" type="button"><span class="nav-icon">◈</span> Productos</button>
+          <button class="nav-item" data-section="reports" type="button"><span class="nav-icon">▥</span> Reportes</button>
+          <button class="nav-item" data-section="settings" type="button"><span class="nav-icon">⚙</span> Configuración</button>
+        </nav>
+
+        <div class="sidebar-footer">
+          <div class="local-mode"><i class="status-dot"></i><span>Modo local activo</span></div>
+          <small>Los datos se guardan en este equipo</small>
+        </div>
+      </aside>
+
+      <main class="main-content">
+        <header class="topbar">
+          <button class="mobile-menu" id="mobile-menu" type="button" aria-label="Abrir menú">☰</button>
+          <div class="breadcrumb"><span>DIEX INVEL</span><b>/</b><strong id="page-title">Resumen</strong></div>
+          <div class="topbar-actions">
+            <span class="today" id="today-label"></span>
+            <button class="icon-button" type="button" title="Notificaciones">♢<span class="notification-dot"></span></button>
+            <div class="user-chip"><span class="avatar">AD</span><span><strong>Administrador</strong><small>Sesión local</small></span></div>
+          </div>
+        </header>
+
+        <div class="content-wrap">
+          <section class="page-section active" id="section-dashboard">
+            <div class="page-heading">
+              <div><span class="eyebrow">Panel principal</span><h1>Buenos días, Administrador</h1><p>Este es el estado de tu operación al día de hoy.</p></div>
+              <div class="heading-actions"><button class="button button-secondary" data-open="purchase" type="button">+ Registrar compra</button><button class="button button-primary" data-open="sale" type="button">+ Nueva venta</button></div>
+            </div>
+
+            <div class="stat-grid">
+              <article class="stat-card"><div class="stat-top"><span>Ventas del periodo</span><span class="stat-icon blue">↗</span></div><strong id="stat-sales">S/ 0.00</strong><small id="stat-sales-note">Sin operaciones registradas</small></article>
+              <article class="stat-card"><div class="stat-top"><span>Por cobrar</span><span class="stat-icon amber">◷</span></div><strong id="stat-pending">S/ 0.00</strong><small id="stat-pending-note">Ventas pendientes de pago</small></article>
+              <article class="stat-card"><div class="stat-top"><span>Productos activos</span><span class="stat-icon green">◈</span></div><strong id="stat-products">0</strong><small id="stat-products-note">0 con stock bajo</small></article>
+              <article class="stat-card"><div class="stat-top"><span>Valor del inventario</span><span class="stat-icon violet">▣</span></div><strong id="stat-inventory">S/ 0.00</strong><small>Kardex a costo promedio</small></article>
+            </div>
+
+            <div class="dashboard-grid">
+              <article class="panel chart-panel"><div class="panel-heading"><div><h2>Movimiento de ventas</h2><p>Últimos 7 días</p></div><span class="legend"><i></i> Ventas</span></div><div class="bar-chart" id="sales-chart"></div></article>
+              <article class="panel low-stock-panel"><div class="panel-heading"><div><h2>Stock por atender</h2><p>Productos en nivel mínimo</p></div><button class="text-button" data-section-link="inventory" type="button">Ver inventario →</button></div><div id="low-stock-list" class="compact-list"></div></article>
+            </div>
+
+            <article class="panel recent-panel"><div class="panel-heading"><div><h2>Últimas operaciones</h2><p>Movimientos registrados recientemente</p></div><button class="text-button" data-section-link="reports" type="button">Ver todas →</button></div><div class="table-scroll"><table><thead><tr><th>Referencia</th><th>Tipo</th><th>Fecha</th><th>Responsable</th><th class="align-right">Importe</th><th>Estado</th></tr></thead><tbody id="recent-operations"></tbody></table></div></article>
+          </section>
+
+          <section class="page-section" id="section-sales">
+            <div class="page-heading compact-heading"><div><span class="eyebrow">Operación</span><h1>Ventas</h1><p>Registra ventas, pedidos y documentos de atención al cliente.</p></div><button class="button button-primary" data-open="sale" type="button">+ Nueva venta</button></div>
+            <div class="toolbar"><div class="search-box"><span>⌕</span><input id="sales-search" type="search" placeholder="Buscar por cliente o referencia" /></div><select id="sales-status-filter"><option value="all">Todos los estados</option><option value="paid">Pagadas</option><option value="pending">Pendientes</option></select><select id="sales-type-filter"><option value="all">Todos los documentos</option><option value="boleta">Boleta</option><option value="factura">Factura</option><option value="pedido">Nota de pedido</option><option value="cotizacion">Cotización</option></select></div>
+            <article class="panel"><div class="table-scroll"><table><thead><tr><th>Referencia</th><th>Cliente</th><th>Documento</th><th>Fecha</th><th class="align-right">Total</th><th>Pago</th><th></th></tr></thead><tbody id="sales-table"></tbody></table></div></article>
+          </section>
+
+          <section class="page-section" id="section-purchases">
+            <div class="page-heading compact-heading"><div><span class="eyebrow">Abastecimiento</span><h1>Compras</h1><p>Ingresa mercadería, costos, moneda y documentos de proveedor.</p></div><button class="button button-primary" data-open="purchase" type="button">+ Registrar compra</button></div>
+            <div class="mini-stat-grid"><div class="mini-stat"><span>Compras registradas</span><strong id="purchase-count">0</strong></div><div class="mini-stat"><span>Compras del mes</span><strong id="purchase-total">S/ 0.00</strong></div><div class="mini-stat"><span>En soles</span><strong id="purchase-pen">S/ 0.00</strong></div></div>
+            <article class="panel"><div class="panel-heading"><div><h2>Historial de compras</h2><p>El costo actualiza el promedio del Kardex.</p></div></div><div class="table-scroll"><table><thead><tr><th>Referencia</th><th>Proveedor</th><th>Producto</th><th>Documento</th><th>Fecha</th><th class="align-right">Total</th></tr></thead><tbody id="purchases-table"></tbody></table></div></article>
+          </section>
+
+          <section class="page-section" id="section-inventory">
+            <div class="page-heading compact-heading"><div><span class="eyebrow">Control de existencias</span><h1>Inventario</h1><p>Control físico y documentado por producto.</p></div><button class="button button-primary" data-open="product" type="button">+ Nuevo producto</button></div>
+            <div class="inventory-summary"><div class="inventory-summary-card"><span>Unidades físicas</span><strong id="inventory-physical">0</strong><small>Stock total disponible</small></div><div class="inventory-summary-card"><span>Unidades documentadas</span><strong id="inventory-documented">0</strong><small>Respaldadas por factura</small></div><div class="inventory-summary-card warning"><span>Alertas de stock</span><strong id="inventory-alerts">0</strong><small>Requieren atención</small></div></div>
+            <div class="toolbar"><div class="search-box"><span>⌕</span><input id="inventory-search" type="search" placeholder="Buscar producto, familia o marca" /></div><select id="inventory-stock-filter"><option value="all">Todo el stock</option><option value="low">Stock bajo</option><option value="out">Agotados</option></select></div>
+            <article class="panel"><div class="table-scroll"><table><thead><tr><th>Producto</th><th>Familia / marca</th><th>Físico</th><th>Documentado</th><th>Costo promedio</th><th>Valor stock</th><th>Estado</th></tr></thead><tbody id="inventory-table"></tbody></table></div></article>
+          </section>
+
+          <section class="page-section" id="section-products">
+            <div class="page-heading compact-heading"><div><span class="eyebrow">Catálogo</span><h1>Productos</h1><p>Administra precios por presentación, costos y niveles mínimos.</p></div><button class="button button-primary" data-open="product" type="button">+ Nuevo producto</button></div>
+            <div class="toolbar"><div class="search-box"><span>⌕</span><input id="products-search" type="search" placeholder="Buscar por código o nombre" /></div><button class="button button-secondary" id="export-products" type="button">↓ Exportar CSV</button></div>
+            <article class="panel"><div class="table-scroll"><table><thead><tr><th>Código</th><th>Producto</th><th>Familia</th><th>Presentación</th><th>Precio unidad</th><th>Precio pack</th><th>Costo</th><th>Acciones</th></tr></thead><tbody id="products-table"></tbody></table></div></article>
+          </section>
+
+          <section class="page-section" id="section-reports">
+            <div class="page-heading compact-heading"><div><span class="eyebrow">Información para decidir</span><h1>Reportes</h1><p>Consulta movimientos, ventas y Kardex valorizado.</p></div><button class="button button-secondary" id="export-kardex" type="button">↓ Exportar Kardex CSV</button></div>
+            <div class="report-filter"><label>Desde <input id="report-from" type="date" /></label><label>Hasta <input id="report-to" type="date" /></label><label>Producto <select id="report-product"><option value="all">Todos los productos</option></select></label></div>
+            <div class="report-grid"><article class="panel report-highlight"><span class="eyebrow">Kardex valorizado</span><strong id="report-stock-value">S/ 0.00</strong><p>Valorización estimada al costo promedio ponderado.</p><div class="progress"><i id="report-progress"></i></div><small id="report-progress-label">Sin datos todavía</small></article><article class="panel report-highlight"><span class="eyebrow">Rotación del periodo</span><strong id="report-rotation">0.00</strong><p>Salidas físicas / stock físico promedio.</p><div class="report-split"><span>Salidas <b id="report-out">0</b></span><span>Entradas <b id="report-in">0</b></span></div></article></div>
+            <article class="panel"><div class="panel-heading"><div><h2>Movimientos del Kardex</h2><p>Cada entrada y salida queda registrada con su costo.</p></div></div><div class="table-scroll"><table><thead><tr><th>Fecha</th><th>Referencia</th><th>Producto</th><th>Movimiento</th><th class="align-right">Cantidad</th><th class="align-right">Costo unit.</th><th class="align-right">Valor</th></tr></thead><tbody id="kardex-table"></tbody></table></div></article>
+          </section>
+
+          <section class="page-section" id="section-settings">
+            <div class="page-heading compact-heading"><div><span class="eyebrow">Control del sistema</span><h1>Configuración</h1><p>Parámetros iniciales y puntos pendientes de la siguiente fase.</p></div></div>
+            <div class="settings-grid"><article class="panel"><div class="panel-heading"><div><h2>Roles definidos</h2><p>La aplicación está preparada para separar permisos.</p></div></div><div class="role-list"><div><span class="role-icon navy">AD</span><span><strong>Administrador</strong><small>Catálogo, costos, reportes y configuración</small></span><em>Activo</em></div><div><span class="role-icon blue">SU</span><span><strong>Supervisor</strong><small>Precios, autorizaciones y control operativo</small></span><em>Planificado</em></div><div><span class="role-icon amber">VE</span><span><strong>Ventas / Caja</strong><small>Registro de ventas y pagos</small></span><em>Planificado</em></div><div><span class="role-icon green">MO</span><span><strong>Ventas móviles</strong><small>Stock de camión, entregas y cobranzas</small></span><em>Planificado</em></div></div></article><article class="panel"><div class="panel-heading"><div><h2>Próxima fase</h2><p>Estado de los componentes que faltan.</p></div></div><div class="check-list"><div class="done"><i>✓</i><span><strong>Base de operación local</strong><small>Productos, compras, ventas y stock</small></span></div><div class="done"><i>✓</i><span><strong>Kardex promedio ponderado</strong><small>Entradas, salidas y valorización</small></span></div><div><i>○</i><span><strong>Base de datos multiempresa</strong><small>Supabase, usuarios y aislamiento por empresa</small></span></div><div><i>○</i><span><strong>Documentos e integración SUNAT</strong><small>Emisión, series y consulta de RUC</small></span></div><div><i>○</i><span><strong>Impresión térmica y exportación Excel</strong><small>Formatos finales para operación</small></span></div></div></article></div>
+            <article class="panel note-panel"><span class="note-icon">i</span><div><strong>Decisión pendiente del Kardex</strong><p>Esta primera versión usa <b>promedio ponderado</b>, porque permite trabajar con compras en costos distintos. Antes de conectarlo a contabilidad conviene validarlo con el contador y definir el tratamiento de bonificaciones, devoluciones y notas de crédito.</p></div></article>
+          </section>
+        </div>
+      </main>
+    </div>
+
+    <div class="modal-backdrop" id="modal-backdrop" hidden>
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+        <div class="modal-header"><div><span class="eyebrow">Registro</span><h2 id="modal-title">Nueva operación</h2></div><button class="close-button" data-close-modal type="button" aria-label="Cerrar">×</button></div>
+        <div id="modal-sale" class="modal-body" hidden>
+          <form id="sale-form">
+            <div class="form-grid"><label>Tipo de operación<select id="sale-type"><option value="boleta">Boleta de venta</option><option value="factura">Factura de venta</option><option value="pedido">Nota de pedido</option><option value="cotizacion">Cotización</option></select></label><label>Cliente<input id="sale-client" required placeholder="Cliente general" /></label></div>
+            <div class="line-entry"><label class="wide">Producto<select id="sale-product"></select></label><label>Cantidad<input id="sale-qty" min="0.01" step="0.01" type="number" value="1" /></label><label>Presentación<select id="sale-unit"></select></label><button class="button button-secondary add-line" id="add-sale-line" type="button">Agregar</button></div>
+            <div class="cart-box"><div class="cart-heading"><span>Detalle de la operación</span><span id="cart-count">0 productos</span></div><div class="table-scroll"><table><thead><tr><th>Producto</th><th>Presentación</th><th class="align-right">Cant.</th><th class="align-right">P. unit.</th><th class="align-right">Importe</th><th></th></tr></thead><tbody id="sale-cart"></tbody></table></div><div class="empty-cart" id="empty-cart">Agrega productos para iniciar la operación.</div></div>
+            <div class="sale-footer"><label>Pago recibido<input id="sale-payment" min="0" step="0.01" type="number" value="0" /></label><div class="sale-total"><span>Total</span><strong id="sale-total">S/ 0.00</strong><small id="sale-balance">Saldo: S/ 0.00</small></div></div>
+            <div class="modal-actions"><button class="button button-secondary" data-close-modal type="button">Cancelar</button><button class="button button-primary" type="submit">Registrar operación</button></div>
+          </form>
+        </div>
+        <div id="modal-purchase" class="modal-body" hidden>
+          <form id="purchase-form"><div class="form-grid"><label>Proveedor<input id="purchase-supplier" required placeholder="Nombre del proveedor" /></label><label>Documento<select id="purchase-type"><option value="factura">Factura de compra</option><option value="boleta">Boleta de compra</option><option value="pedido">Nota de pedido</option><option value="otro">Otro documento</option></select></label></div><div class="form-grid"><label>Producto<select id="purchase-product"></select></label><label>Cantidad<input id="purchase-qty" min="0.01" step="0.01" type="number" value="1" /></label><label>Costo unitario<input id="purchase-cost" min="0" step="0.01" type="number" value="0" /></label><label>Moneda<select id="purchase-currency"><option value="PEN">Soles (S/)</option><option value="USD">Dólares (USD)</option></select></label><label>Tipo de cambio<input id="purchase-exchange" min="0" step="0.0001" type="number" value="1" /></label></div><div class="purchase-note"><span>ⓘ</span><p>Una compra con factura aumenta el stock físico y documentado. Otros documentos aumentan solo el stock físico. Si compras en dólares, el tipo de cambio convierte el costo al Kardex en soles.</p></div><div class="modal-actions"><button class="button button-secondary" data-close-modal type="button">Cancelar</button><button class="button button-primary" type="submit">Registrar compra</button></div></form>
+        </div>
+        <div id="modal-product" class="modal-body" hidden>
+          <form id="product-form"><div class="form-grid"><label>Código<input id="product-code" required placeholder="P-0001" /></label><label>Nombre del producto<input id="product-name" required placeholder="Ej. Harina premium" /></label><label>Familia<input id="product-family" placeholder="Familia" /></label><label>Marca<input id="product-brand" placeholder="Marca" /></label><label>Presentación base<input id="product-presentation" value="Unidad" /></label><label>Stock físico inicial<input id="product-physical" min="0" step="0.01" type="number" value="0" /></label><label>Stock documentado inicial<input id="product-documented" min="0" step="0.01" type="number" value="0" /></label><label>Stock mínimo<input id="product-min" min="0" step="0.01" type="number" value="5" /></label><label>Costo promedio (S/)<input id="product-cost" min="0" step="0.01" type="number" value="0" /></label><label>Precio unidad (S/)<input id="product-price-unit" min="0" step="0.01" type="number" value="0" /></label><label>Precio docena (S/)<input id="product-price-dozen" min="0" step="0.01" type="number" value="0" /></label><label>Precio pack (S/)<input id="product-price-pack" min="0" step="0.01" type="number" value="0" /></label></div><div class="modal-actions"><button class="button button-secondary" data-close-modal type="button">Cancelar</button><button class="button button-primary" type="submit">Guardar producto</button></div></form>
+        </div>
+      </div>
+    </div>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  </body>
+</html>
