@@ -40,6 +40,8 @@ function loadState() {
 let state = loadState();
 let saleCart = [];
 let toastTimer;
+let cloudSnapshotTimer;
+let remoteContext = null;
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -61,6 +63,150 @@ function showToast(message, type = "success") {
   toast.className = `toast show ${type === "error" ? "error" : ""}`;
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => { toast.className = "toast"; }, 3500);
+}
+
+function updateRemoteUI(errorMessage = "") {
+  const client = window.DiexSupabase;
+  const configured = Boolean(client?.isConfigured());
+  const connected = Boolean(remoteContext);
+  const badge = $("#connection-badge");
+  const stateLabel = $("#connection-state");
+  const authForm = $("#remote-auth-form");
+  const authenticatedActions = $("#authenticated-actions");
+  const connectionLabel = $("#connection-label");
+  const connectionNote = $("#connection-note");
+  const userName = $("#user-name");
+  const userSession = $("#user-session");
+  const userAvatar = $("#user-avatar");
+
+  if (!configured) {
+    badge.className = "connection-badge error";
+    badge.textContent = "Sin configurar";
+    stateLabel.textContent = "Falta la configuración pública de Supabase.";
+    authForm.hidden = true;
+    authenticatedActions.hidden = true;
+    return;
+  }
+  if (connected) {
+    const name = remoteContext.fullName || remoteContext.email || "Usuario";
+    const initials = name.split(" ").filter(Boolean).slice(0, 2).map((word) => word[0]).join("").toUpperCase();
+    badge.className = "connection-badge connected";
+    badge.textContent = "Conectado";
+    stateLabel.textContent = `${name} · ${remoteContext.role} · ${remoteContext.organization?.trade_name || "DIEX INVEL"}`;
+    authForm.hidden = true;
+    authenticatedActions.hidden = false;
+    connectionLabel.textContent = "Modo local + Supabase";
+    connectionNote.textContent = "Los cambios se guardan localmente y se pueden respaldar en la nube";
+    userName.textContent = name;
+    userSession.textContent = `Supabase · ${remoteContext.role}`;
+    userAvatar.textContent = initials || "US";
+    return;
+  }
+  badge.className = errorMessage ? "connection-badge error" : "connection-badge";
+  badge.textContent = errorMessage ? "Revisar" : "Sin sesión";
+  stateLabel.textContent = errorMessage || "Configuración lista. Inicia sesión para habilitar la copia remota.";
+  authForm.hidden = false;
+  authenticatedActions.hidden = true;
+  connectionLabel.textContent = "Modo local activo";
+  connectionNote.textContent = "Los datos se guardan en este equipo";
+  userName.textContent = "Administrador";
+  userSession.textContent = "Sesión local";
+  userAvatar.textContent = "AD";
+}
+
+async function refreshRemoteConnection() {
+  if (!window.DiexSupabase) return;
+  try {
+    const status = await window.DiexSupabase.connectionStatus();
+    remoteContext = status.context;
+    updateRemoteUI();
+  } catch (error) {
+    remoteContext = null;
+    updateRemoteUI(error.message);
+  }
+}
+
+async function signInRemote(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const button = $("#remote-signin");
+  button.disabled = true;
+  try {
+    await window.DiexSupabase.signIn($("#remote-email").value.trim(), $("#remote-password").value);
+    remoteContext = await window.DiexSupabase.getUserContext();
+    updateRemoteUI();
+    showToast("Sesión de Supabase iniciada.");
+    form.reset();
+  } catch (error) {
+    updateRemoteUI(error.message);
+    showToast(`No se pudo iniciar sesión: ${error.message}`, "error");
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function signUpRemote() {
+  const form = $("#remote-auth-form");
+  if (!form.reportValidity()) return;
+  const button = $("#remote-signup");
+  button.disabled = true;
+  try {
+    const result = await window.DiexSupabase.signUp($("#remote-email").value.trim(), $("#remote-password").value, $("#remote-full-name").value.trim());
+    if (result?.access_token) {
+      remoteContext = await window.DiexSupabase.getUserContext();
+      updateRemoteUI();
+      showToast("Usuario creado y conectado como administrador.");
+      form.reset();
+    } else {
+      showToast("Usuario creado. Revisa tu correo para confirmar la cuenta y luego inicia sesión.");
+    }
+  } catch (error) {
+    updateRemoteUI(error.message);
+    showToast(`No se pudo crear el usuario: ${error.message}`, "error");
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function signOutRemote() {
+  await window.DiexSupabase.signOut();
+  remoteContext = null;
+  updateRemoteUI();
+  showToast("Sesión remota cerrada. El modo local continúa disponible.");
+}
+
+async function saveRemoteSnapshot(showResult = true) {
+  if (!remoteContext) return showToast("Inicia sesión en Supabase antes de guardar la copia.", "error");
+  try {
+    await window.DiexSupabase.saveLocalSnapshot(state);
+    if (showResult) showToast("Copia local guardada en Supabase.");
+  } catch (error) {
+    if (showResult) showToast(`No se pudo guardar la copia: ${error.message}`, "error");
+    else console.warn("La copia remota quedó pendiente", error);
+  }
+}
+
+function queueCloudSnapshot() {
+  if (!remoteContext) return;
+  clearTimeout(cloudSnapshotTimer);
+  cloudSnapshotTimer = setTimeout(() => saveRemoteSnapshot(false), 800);
+}
+
+async function loadRemoteSnapshot() {
+  if (!remoteContext) return showToast("Inicia sesión en Supabase antes de descargar la copia.", "error");
+  try {
+    const row = await window.DiexSupabase.loadLocalSnapshot();
+    if (!row?.value_json) return showToast("Todavía no existe una copia remota para esta organización.", "error");
+    if (!window.confirm("Esto reemplazará los datos locales de este equipo por la copia remota. ¿Continuar?")) return;
+    if (!Array.isArray(row.value_json.products) || !Array.isArray(row.value_json.sales) || !Array.isArray(row.value_json.purchases)) throw new Error("La copia remota no tiene el formato esperado.");
+    state = row.value_json;
+    saleCart = [];
+    persist();
+    renderAll();
+    showToast("Copia remota descargada en este equipo.");
+  } catch (error) {
+    showToast(`No se pudo descargar la copia: ${error.message}`, "error");
+  }
 }
 
 function setSection(section) {
@@ -220,7 +366,7 @@ function recordSale(event) {
     line.documentedQuantity = documentedOut;
   });
   state.sales.push(sale);
-  persist(); renderAll(); closeModal();
+  persist(); queueCloudSnapshot(); renderAll(); closeModal();
   showToast(`${reference} registrada correctamente.`);
 }
 
@@ -242,7 +388,7 @@ function recordPurchase(event) {
   const purchase = { id: uid("purchase"), reference, date: todayISO(), supplier: $("#purchase-supplier").value.trim(), type, productId: product.id, quantity, cost, exchange, currency, costInSoles, total: quantity * costInSoles };
   state.purchases.push(purchase);
   state.movements.push({ id: uid("mov"), date: purchase.date, reference, productId: product.id, kind: "purchase", direction: "in", quantity, unitCost: costInSoles, value: quantity * costInSoles });
-  persist(); renderAll(); closeModal();
+  persist(); queueCloudSnapshot(); renderAll(); closeModal();
   showToast(`${reference} registrada y stock actualizado.`);
 }
 
@@ -252,7 +398,7 @@ function recordProduct(event) {
   if (state.products.some((item) => item.code.toLowerCase() === product.code.toLowerCase())) return showToast("Ese código de producto ya existe.", "error");
   state.products.push(product);
   if (product.physical > 0) state.movements.push({ id: uid("mov"), date: todayISO(), reference: "SALDO-INICIAL", productId: product.id, kind: "purchase", direction: "in", quantity: product.physical, unitCost: product.cost, value: product.physical * product.cost });
-  persist(); renderAll(); closeModal();
+  persist(); queueCloudSnapshot(); renderAll(); closeModal();
   showToast(`${product.name} agregado al catálogo.`);
 }
 
@@ -284,6 +430,11 @@ function bindEvents() {
   ["#products-search", "#inventory-search", "#inventory-stock-filter", "#sales-search", "#sales-status-filter", "#sales-type-filter", "#report-from", "#report-to", "#report-product"].forEach((selector) => $(selector)?.addEventListener("input", () => { renderProducts(); renderInventory(); renderSales(); renderReports(); }));
   $("#export-products").addEventListener("click", exportProducts);
   $("#export-kardex").addEventListener("click", exportKardex);
+  $("#remote-auth-form")?.addEventListener("submit", signInRemote);
+  $("#remote-signup")?.addEventListener("click", signUpRemote);
+  $("#remote-signout")?.addEventListener("click", signOutRemote);
+  $("#remote-save")?.addEventListener("click", () => saveRemoteSnapshot(true));
+  $("#remote-load")?.addEventListener("click", loadRemoteSnapshot);
   document.addEventListener("keydown", (event) => { if (event.key === "Escape" && !$("#modal-backdrop").hidden) closeModal(); });
 }
 
@@ -291,6 +442,7 @@ function init() {
   $("#today-label").textContent = new Date().toLocaleDateString("es-PE", { weekday: "long", day: "numeric", month: "long" });
   bindEvents();
   renderAll();
+  refreshRemoteConnection();
 }
 
 document.addEventListener("DOMContentLoaded", init);

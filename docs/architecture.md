@@ -14,9 +14,11 @@ PC servidor local (API + PostgreSQL)
 
 Supabase será una capa opcional para respaldo, sincronización y acceso remoto. No se expondrá PostgreSQL directamente a internet. El acceso remoto deberá pasar por una API segura, VPN o servicios gestionados.
 
-## Estado actual
+## Implementación actual
 
-El prototipo de `src/` es estático y se ejecuta en el navegador. `app.js` mantiene datos de demostración en `localStorage`; no existe todavía API, servidor, autenticación ni base de datos compartida.
+El prototipo de `src/` es estático y se ejecuta en el navegador. `app.js` mantiene los datos operativos en `localStorage` para funcionar sin internet. `supabase-client.js` conecta Auth y `app_settings` mediante REST usando solo la clave publishable; después de iniciar sesión permite guardar o descargar una copia remota autenticada. Las migraciones normalizadas ya están aplicadas en Supabase con RLS por organización.
+
+Esta copia remota es un respaldo de transición. No debe considerarse todavía la fuente compartida de verdad para varias PCs, porque dos equipos pueden sobrescribir simultáneamente el mismo snapshot.
 
 ## Límites de los componentes
 
@@ -24,6 +26,7 @@ El prototipo de `src/` es estático y se ejecuta en el navegador. `app.js` manti
 - El futuro servidor será responsable de validar permisos, reglas de stock, numeración, transacciones y auditoría.
 - PostgreSQL será la fuente compartida de verdad para todas las PCs del local.
 - Un mecanismo de sincronización opcional enviará cambios autorizados a Supabase cuando exista internet.
+- La aplicación guarda primero localmente; la copia remota se puede guardar manualmente y se programa después de nuevas operaciones cuando hay una sesión administrativa.
 
 ## Flujo de datos
 

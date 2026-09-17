@@ -11,6 +11,8 @@ coverage/
 *.sqlite3
 *.db
 backups/
+supabase/.temp/
+.supabase/
 
 # Sistema operativo y editor
 .DS_Store

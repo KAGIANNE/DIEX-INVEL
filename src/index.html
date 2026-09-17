@@ -6,6 +6,8 @@
     <meta name="theme-color" content="#0c1f35" />
     <title>DIEX INVEL | Gestión comercial</title>
     <link rel="stylesheet" href="styles.css" />
+    <script src="supabase-config.js"></script>
+    <script src="supabase-client.js"></script>
     <script src="app.js" defer></script>
   </head>
   <body>
@@ -41,8 +43,8 @@
         </nav>
 
         <div class="sidebar-footer">
-          <div class="local-mode"><i class="status-dot"></i><span>Modo local activo</span></div>
-          <small>Los datos se guardan en este equipo</small>
+          <div class="local-mode"><i class="status-dot" id="connection-dot"></i><span id="connection-label">Modo local activo</span></div>
+          <small id="connection-note">Los datos se guardan en este equipo</small>
         </div>
       </aside>
 
@@ -53,7 +55,7 @@
           <div class="topbar-actions">
             <span class="today" id="today-label"></span>
             <button class="icon-button" type="button" title="Notificaciones">♢<span class="notification-dot"></span></button>
-            <div class="user-chip"><span class="avatar">AD</span><span><strong>Administrador</strong><small>Sesión local</small></span></div>
+            <div class="user-chip"><span class="avatar" id="user-avatar">AD</span><span><strong id="user-name">Administrador</strong><small id="user-session">Sesión local</small></span></div>
           </div>
         </header>
 
@@ -113,7 +115,21 @@
 
           <section class="page-section" id="section-settings">
             <div class="page-heading compact-heading"><div><span class="eyebrow">Control del sistema</span><h1>Configuración</h1><p>Parámetros iniciales y puntos pendientes de la siguiente fase.</p></div></div>
-            <div class="settings-grid"><article class="panel"><div class="panel-heading"><div><h2>Roles definidos</h2><p>La aplicación está preparada para separar permisos.</p></div></div><div class="role-list"><div><span class="role-icon navy">AD</span><span><strong>Administrador</strong><small>Catálogo, costos, reportes y configuración</small></span><em>Activo</em></div><div><span class="role-icon blue">SU</span><span><strong>Supervisor</strong><small>Precios, autorizaciones y control operativo</small></span><em>Planificado</em></div><div><span class="role-icon amber">VE</span><span><strong>Ventas / Caja</strong><small>Registro de ventas y pagos</small></span><em>Planificado</em></div><div><span class="role-icon green">MO</span><span><strong>Ventas móviles</strong><small>Stock de camión, entregas y cobranzas</small></span><em>Planificado</em></div></div></article><article class="panel"><div class="panel-heading"><div><h2>Próxima fase</h2><p>Estado de los componentes que faltan.</p></div></div><div class="check-list"><div class="done"><i>✓</i><span><strong>Base de operación local</strong><small>Productos, compras, ventas y stock</small></span></div><div class="done"><i>✓</i><span><strong>Kardex promedio ponderado</strong><small>Entradas, salidas y valorización</small></span></div><div><i>○</i><span><strong>Base de datos multiempresa</strong><small>Supabase, usuarios y aislamiento por empresa</small></span></div><div><i>○</i><span><strong>Documentos e integración SUNAT</strong><small>Emisión, series y consulta de RUC</small></span></div><div><i>○</i><span><strong>Impresión térmica y exportación Excel</strong><small>Formatos finales para operación</small></span></div></div></article></div>
+            <article class="panel connection-panel">
+              <div class="panel-heading"><div><h2>Conexión con Supabase</h2><p>La operación continúa localmente y permite guardar una copia remota cuando hay Internet.</p></div><span class="connection-badge" id="connection-badge">Sin sesión</span></div>
+              <div class="connection-content">
+                <div class="connection-state" id="connection-state">Configuración lista. Inicia sesión para habilitar la copia remota.</div>
+                <form class="remote-auth-form" id="remote-auth-form">
+                  <label>Correo electrónico<input id="remote-email" type="email" autocomplete="username" required placeholder="admin@empresa.com" /></label>
+                  <label>Contraseña<input id="remote-password" type="password" autocomplete="current-password" minlength="6" required placeholder="Mínimo 6 caracteres" /></label>
+                  <label class="remote-name-field">Nombre (solo para nuevo usuario)<input id="remote-full-name" type="text" autocomplete="name" placeholder="Administrador" /></label>
+                  <div class="connection-actions"><button class="button button-primary" id="remote-signin" type="submit">Iniciar sesión</button><button class="button button-secondary" id="remote-signup" type="button">Crear primer usuario</button></div>
+                </form>
+                <div class="connection-actions authenticated-actions" id="authenticated-actions" hidden><button class="button button-secondary" id="remote-save" type="button">Guardar copia en Supabase</button><button class="button button-secondary" id="remote-load" type="button">Descargar copia remota</button><button class="text-button" id="remote-signout" type="button">Cerrar sesión</button></div>
+                <small class="connection-hint">La clave publishable está diseñada para el frontend. No se usa ni se guarda ninguna clave secreta.</small>
+              </div>
+            </article>
+            <div class="settings-grid"><article class="panel"><div class="panel-heading"><div><h2>Roles definidos</h2><p>La aplicación está preparada para separar permisos.</p></div></div><div class="role-list"><div><span class="role-icon navy">AD</span><span><strong>Administrador</strong><small>Catálogo, costos, reportes y configuración</small></span><em>Activo</em></div><div><span class="role-icon blue">SU</span><span><strong>Supervisor</strong><small>Precios, autorizaciones y control operativo</small></span><em>Planificado</em></div><div><span class="role-icon amber">VE</span><span><strong>Ventas / Caja</strong><small>Registro de ventas y pagos</small></span><em>Planificado</em></div><div><span class="role-icon green">MO</span><span><strong>Ventas móviles</strong><small>Stock de camión, entregas y cobranzas</small></span><em>Planificado</em></div></div></article><article class="panel"><div class="panel-heading"><div><h2>Próxima fase</h2><p>Estado de los componentes que faltan.</p></div></div><div class="check-list"><div class="done"><i>✓</i><span><strong>Base de operación local</strong><small>Productos, compras, ventas y stock</small></span></div><div class="done"><i>✓</i><span><strong>Kardex promedio ponderado</strong><small>Entradas, salidas y valorización</small></span></div><div class="done"><i>✓</i><span><strong>Base de datos multiempresa</strong><small>Supabase, usuarios y aislamiento por empresa</small></span></div><div><i>○</i><span><strong>Documentos e integración SUNAT</strong><small>Emisión, series y consulta de RUC</small></span></div><div><i>○</i><span><strong>Impresión térmica y exportación Excel</strong><small>Formatos finales para operación</small></span></div></div></article></div>
             <article class="panel note-panel"><span class="note-icon">i</span><div><strong>Decisión pendiente del Kardex</strong><p>Esta primera versión usa <b>promedio ponderado</b>, porque permite trabajar con compras en costos distintos. Antes de conectarlo a contabilidad conviene validarlo con el contador y definir el tratamiento de bonificaciones, devoluciones y notas de crédito.</p></div></article>
           </section>
         </div>

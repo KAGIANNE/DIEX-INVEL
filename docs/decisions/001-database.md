@@ -1,6 +1,14 @@
 # 001 — Propuesta de base de datos comercial
 
-**Estado:** pendiente de verificación del propietario del proyecto. No ejecutar migraciones todavía.
+**Estado:** aprobada e implementada en el proyecto DIEX de Supabase.
+
+## Implementación aplicada
+
+- `supabase/migrations/20260917225712_initial_schema.sql` crea el modelo completo, índices, triggers, semillas y políticas RLS.
+- `supabase/migrations/20260917232646_harden_auth_bootstrap.sql` elimina la RPC pública de arranque y registra automáticamente al primer usuario autenticado como administrador.
+- Verificación remota: 46 tablas públicas, 46 tablas con RLS, 173 políticas y 2 migraciones aplicadas.
+- Se sembraron la organización DIEX INVEL, sede y almacén principal, unidades, métodos de pago y lista general de precios.
+- El frontend conserva `localStorage` como fuente inmediata y usa `app_settings` para una copia remota opcional autenticada.
 
 ## Principios
 
@@ -76,6 +84,6 @@ PostgreSQL será la base compartida. Todas las tablas operativas tendrán `organ
 
 Factura de compra: entrada física y documentada. Otros documentos de compra: entrada física. Cotización: sin movimiento. Nota de pedido: salida física. Boleta/factura de venta: salida física y documental según disponibilidad. Todo movimiento debe ser transaccional y auditable.
 
-## Pendiente de aprobación
+## Pendientes operativos
 
-Confirmar nombres, campos fiscales, tratamiento de notas de crédito y ajustes, método de costos promedio ponderado, numeración por sede y si cada local tendrá servidor propio o una base central.
+Validar con el responsable fiscal los campos de SUNAT, notas de crédito y ajustes. También falta decidir la instalación del servidor local por sede, la numeración oficial y la sincronización transaccional entre PCs. La copia JSON remota actual es respaldo; no reemplaza todavía el servidor local compartido ni resuelve conflictos simultáneos.

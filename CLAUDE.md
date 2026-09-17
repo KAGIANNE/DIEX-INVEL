@@ -2,7 +2,8 @@
 
 ## Project Structure & Module Organization
 
-- `src/` contains the current static prototype: `index.html`, `app.js`, and `styles.css`.
+- `src/` contains the static-first prototype: `index.html`, `app.js`, `supabase-client.js`, `supabase-config.js`, and `styles.css`.
+- `supabase/migrations/` contains the versioned PostgreSQL schema applied to the DIEX Supabase project; `supabase/config.toml` is the CLI project configuration.
 - `docs/` contains architecture, current state, and numbered decision records.
 - `tests/` is reserved for automated and manual test assets; no framework is installed yet.
 - `.cursor/hooks/` contains the guide-sync hook. `README.md` explains how to open the prototype.
@@ -11,6 +12,8 @@
 
 - `start .\src\index.html` opens the local prototype in the default browser.
 - `node --check .\src\app.js` verifies JavaScript syntax.
+- `node --check .\src\supabase-client.js` verifies the Supabase adapter syntax.
+- `supabase db push --project-ref tgibzcuqmrqpyojtvjkf` applies pending migrations; set the isolated CLI home used for DIEX when working outside the desktop session.
 - `node .cursor\hooks\sync-agent-guides.mjs AGENTS.md` synchronizes `CLAUDE.md` after an external edit.
 
 There is no package manager, build step, or production server yet. Do not add dependencies without documenting the reason and updating the architecture decision.
@@ -33,4 +36,4 @@ Use concise imperative commits, for example `feat: add local inventory prototype
 
 ## Security & Architecture Notes
 
-Never commit credentials, customer data, payment data, or production secrets. The target architecture is local-first: installed clients connect to a local server and PostgreSQL over the LAN, with optional cloud synchronization. Supabase remains a proposal until the database design is verified.
+Never commit credentials, customer data, payment data, or production secrets. The publishable Supabase key may be present in the browser configuration; never use `service_role` or secret keys there. The target architecture is local-first: installed clients connect to a local server and PostgreSQL over the LAN, with optional cloud synchronization. Supabase migrations and RLS are implemented; the current frontend uses Supabase only for authenticated backup while the local API and transactional multi-PC sync remain future work.
