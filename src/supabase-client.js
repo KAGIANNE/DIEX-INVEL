@@ -3,6 +3,33 @@
   const sessionStorageKey = "diex-invel-supabase-session-v1";
   const snapshotKey = "local_state_snapshot_v1";
   const defaultOrganizationId = "00000000-0000-0000-0000-000000000001";
+  const usernamePattern = /^[A-Za-z0-9]{3,15}$/;
+  const passwordPattern = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{6,10}$/;
+  const authDomain = "auth.diex.local";
+
+  function normalizeUsername(value) {
+    return String(value || "").trim().toLowerCase();
+  }
+
+  function validateUsername(value) {
+    const username = normalizeUsername(value);
+    if (!usernamePattern.test(username)) throw new Error("El usuario debe tener entre 3 y 15 caracteres, solo letras y números.");
+    return username;
+  }
+
+  function validatePassword(value) {
+    const password = String(value || "");
+    if (!passwordPattern.test(password)) throw new Error("La contraseña debe tener entre 6 y 10 caracteres e incluir letras y números.");
+    return password;
+  }
+
+  function authEmailForUsername(username) {
+    return `${validateUsername(username)}@${authDomain}`;
+  }
+
+  function usernameFromAuthEmail(email) {
+    return normalizeUsername(String(email || "").split("@")[0]);
+  }
 
   let session = readStoredSession();
   let context = null;
@@ -49,7 +76,10 @@
     let payload = null;
     try { payload = text ? JSON.parse(text) : null; } catch (error) { payload = text; }
     if (!response.ok) {
-      const message = payload?.message || payload?.error_description || payload?.error || `Error HTTP ${response.status}`;
+      const rawMessage = payload?.message || payload?.error_description || payload?.error || `Error HTTP ${response.status}`;
+      const message = response.status === 400 && /invalid login credentials/i.test(rawMessage)
+        ? "Usuario o contraseña incorrectos."
+        : rawMessage;
       throw new Error(message);
     }
     return payload;
@@ -77,19 +107,27 @@
     return session;
   }
 
-  async function signIn(email, password) {
+  async function signIn(username, password) {
+    const authEmail = authEmailForUsername(username);
+    validatePassword(password);
     const authenticated = await request("/auth/v1/token?grant_type=password", {
       method: "POST",
-      body: JSON.stringify({ email, password })
+      body: JSON.stringify({ email: authEmail, password })
     }, null);
     context = null;
     return storeSession(sessionWithExpiry(authenticated));
   }
 
-  async function signUp(email, password, fullName) {
+  async function signUp(username, password, fullName) {
+    const normalizedUsername = validateUsername(username);
+    validatePassword(password);
     const registered = await request("/auth/v1/signup", {
       method: "POST",
-      body: JSON.stringify({ email, password, data: { full_name: fullName } })
+      body: JSON.stringify({
+        email: authEmailForUsername(normalizedUsername),
+        password,
+        data: { username: normalizedUsername, full_name: fullName }
+      })
     }, null);
     if (registered?.access_token) storeSession(sessionWithExpiry(registered));
     return registered;
@@ -137,7 +175,7 @@
 
     const membership = memberships[0];
     const profiles = await rest("user_profiles", {
-      select: "id,full_name,phone",
+      select: "id,username,full_name,phone",
       id: `eq.${activeSession.user.id}`,
       limit: "1"
     });
@@ -148,8 +186,8 @@
     });
     context = {
       userId: activeSession.user.id,
-      email: activeSession.user.email || "",
-      fullName: profiles?.[0]?.full_name || activeSession.user.email || "Usuario",
+      username: profiles?.[0]?.username || usernameFromAuthEmail(activeSession.user.email),
+      fullName: profiles?.[0]?.full_name || profiles?.[0]?.username || usernameFromAuthEmail(activeSession.user.email) || "Usuario",
       organizationId: membership.organization_id || defaultOrganizationId,
       organization: organizations?.[0] || null,
       role: membership.role
@@ -171,8 +209,8 @@
       rest("branches", { select: "id,code,name,address,phone,active,created_at", organization_id: `eq.${organizationId}`, order: "name.asc" }),
       rest("warehouses", { select: "id,branch_id,code,name,warehouse_type,active,created_at", organization_id: `eq.${organizationId}`, order: "name.asc" }),
       rest("organization_members", { select: "organization_id,user_id,role,branch_id,warehouse_id,active,created_at,updated_at", organization_id: `eq.${organizationId}`, order: "created_at.asc" }),
-      rest("user_profiles", { select: "id,email,full_name,document_number,phone,active,created_at,updated_at", order: "full_name.asc" }),
-      rest("user_invitations", { select: "id,email,full_name,phone,role,branch_id,warehouse_id,active,created_at,accepted_at", organization_id: `eq.${organizationId}`, order: "created_at.desc" })
+      rest("user_profiles", { select: "id,username,full_name,document_number,phone,active,created_at,updated_at", order: "full_name.asc" }),
+      rest("user_invitations", { select: "id,username,full_name,phone,role,branch_id,warehouse_id,active,created_at,accepted_at", organization_id: `eq.${organizationId}`, order: "created_at.desc" })
     ]);
     const memberIds = new Set((members || []).map((member) => member.user_id));
     return {
@@ -187,9 +225,8 @@
 
   async function createAdministrationUser(input) {
     const currentContext = await requireAdminContext();
-    const email = String(input.email || "").trim().toLowerCase();
-    if (!email) throw new Error("El correo del usuario es obligatorio.");
-    const existingProfiles = await rest("user_profiles", { select: "id,email,full_name,phone", email: `eq.${email}`, limit: "1" });
+    const username = validateUsername(input.username);
+    const existingProfiles = await rest("user_profiles", { select: "id,username,full_name,phone", username: `eq.${username}`, limit: "1" });
     const profile = existingProfiles?.[0];
     const memberPayload = {
       organization_id: currentContext.organizationId,
@@ -213,17 +250,18 @@
         await restWrite("organization_members", "POST", {}, memberPayload);
       }
       await restWrite("user_profiles", "PATCH", { id: `eq.${profile.id}` }, {
-        full_name: input.fullName || profile.full_name || email,
+        full_name: input.fullName || profile.full_name || username,
         phone: input.phone || profile.phone || null,
         active: true
       });
-      return { kind: "member", email };
+      return { kind: "member", username };
     }
 
     await restWrite("user_invitations", "POST", { on_conflict: "organization_id,email" }, {
       organization_id: currentContext.organizationId,
-      email,
-      full_name: input.fullName || email,
+      username,
+      email: authEmailForUsername(username),
+      full_name: input.fullName || username,
       phone: input.phone || null,
       role: input.role || "sales",
       branch_id: input.branchId || null,
@@ -231,7 +269,7 @@
       active: true,
       invited_by: currentContext.userId
     });
-    return { kind: "invitation", email };
+    return { kind: "invitation", username };
   }
 
   async function updateAdministrationUser(input) {
@@ -283,7 +321,8 @@
       id: `eq.${invitationId}`,
       organization_id: `eq.${currentContext.organizationId}`
     }, {
-      email: input.email.trim().toLowerCase(),
+      username: validateUsername(input.username),
+      email: authEmailForUsername(input.username),
       full_name: input.fullName,
       phone: input.phone || null,
       role: input.role,

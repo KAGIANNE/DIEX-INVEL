@@ -12,7 +12,7 @@ La interfaz usa `src/theme.css` como capa visual de la aplicación: colores por 
 
 La aplicación ya está configurada para el proyecto DIEX (tgibzcuqmrqpyojtvjkf.supabase.co) con una clave publishable. El acceso a todos los módulos pasa por Supabase Auth:
 
-1. En la pantalla de acceso, crea el primer usuario con correo, contraseña y nombre. El primer usuario queda como administrador.
+1. En la pantalla de acceso, crea el primer usuario con un nombre de usuario de 3 a 15 caracteres, contraseña de 6 a 10 caracteres (letras y números) y nombre. El primer usuario queda como administrador.
 2. Inicia sesión para comprobar la organización y el rol; sin una sesión válida no se muestran ni se navegan los módulos.
 3. En Configuración, usa Guardar copia en Supabase para respaldar los datos locales.
 4. En otra PC, inicia sesión y usa Descargar copia remota solo cuando quieras reemplazar sus datos locales.
@@ -21,7 +21,7 @@ La autenticación inicial y el refresco de sesión requieren internet. Mientras 
 
 ## Administración
 
-En el menú Administración, el usuario con rol administrador puede editar los datos de la empresa, crear y editar locales, crear y editar almacenes, y administrar usuarios. Los usuarios existentes se pueden editar, inactivar, reactivar o eliminar del acceso. Para un correo que todavía no tiene cuenta, DIEX crea una invitación pendiente; cuando esa persona se registra, el trigger de Supabase le asigna el rol, local y almacén definidos.
+En el menú Administración, el usuario con rol administrador puede editar los datos de la empresa, crear y editar locales, crear y editar almacenes, y administrar usuarios. Los usuarios existentes se pueden editar, inactivar, reactivar o eliminar del acceso. Para un nombre de usuario que todavía no tiene cuenta, DIEX crea una invitación pendiente; cuando esa persona se registra, el trigger de Supabase le asigna el rol, local y almacén definidos. Supabase conserva un identificador técnico interno, pero la aplicación nunca solicita ni muestra un correo.
 
 ## Incluido en esta fase
 

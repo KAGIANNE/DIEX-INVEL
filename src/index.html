@@ -25,12 +25,12 @@
         <div class="auth-heading">
           <span class="eyebrow">Acceso protegido</span>
           <h1 id="auth-title">Inicia sesión para continuar</h1>
-          <p id="auth-description">Usa tu cuenta de Supabase para acceder a la operación y a los datos de tu organización.</p>
+          <p id="auth-description">Usa tu usuario y contraseña para acceder a la operación y a los datos de tu organización.</p>
         </div>
         <div class="auth-loading" id="auth-loading">Comprobando sesión segura…</div>
         <form class="auth-form" id="auth-form" hidden>
-          <label>Correo electrónico<input id="auth-email" type="email" autocomplete="username" required placeholder="admin@empresa.com" /></label>
-          <label>Contraseña<input id="auth-password" type="password" autocomplete="current-password" minlength="6" required placeholder="Mínimo 6 caracteres" /></label>
+          <label>Usuario<input id="auth-username" type="text" autocomplete="username" minlength="3" maxlength="15" pattern="[A-Za-z0-9]{3,15}" required placeholder="ADMIN01" /></label>
+          <label>Contraseña<input id="auth-password" type="password" autocomplete="current-password" minlength="6" maxlength="10" pattern="(?=.*[A-Za-z])(?=.*[0-9])[A-Za-z0-9]{6,10}" required placeholder="6 a 10 caracteres: letras y números" /></label>
           <label class="auth-name-field" id="auth-name-field" hidden>Nombre completo<input id="auth-full-name" type="text" autocomplete="name" placeholder="Administrador" /></label>
           <button class="button button-primary auth-submit" id="auth-submit" type="submit">Iniciar sesión</button>
           <button class="text-button auth-toggle" id="auth-toggle" type="button">Crear el primer usuario</button>
@@ -180,8 +180,8 @@
               <div class="connection-content">
                 <div class="connection-state" id="connection-state">Configuración lista. Inicia sesión para habilitar la copia remota.</div>
                 <form class="remote-auth-form" id="remote-auth-form">
-                  <label>Correo electrónico<input id="remote-email" type="email" autocomplete="username" required placeholder="admin@empresa.com" /></label>
-                  <label>Contraseña<input id="remote-password" type="password" autocomplete="current-password" minlength="6" required placeholder="Mínimo 6 caracteres" /></label>
+                  <label>Usuario<input id="remote-username" type="text" autocomplete="username" minlength="3" maxlength="15" pattern="[A-Za-z0-9]{3,15}" required placeholder="ADMIN01" /></label>
+                  <label>Contraseña<input id="remote-password" type="password" autocomplete="current-password" minlength="6" maxlength="10" pattern="(?=.*[A-Za-z])(?=.*[0-9])[A-Za-z0-9]{6,10}" required placeholder="6 a 10 caracteres: letras y números" /></label>
                   <label class="remote-name-field">Nombre (solo para nuevo usuario)<input id="remote-full-name" type="text" autocomplete="name" placeholder="Administrador" /></label>
                   <div class="connection-actions"><button class="button button-primary" id="remote-signin" type="submit">Iniciar sesión</button><button class="button button-secondary" id="remote-signup" type="button">Crear primer usuario</button></div>
                 </form>

@@ -21,7 +21,7 @@ PostgreSQL será la base compartida. Todas las tablas operativas tendrán `organ
 - `organizations`: `id`, `legal_name`, `trade_name`, `tax_id`, `currency`, `timezone`, `active`.
 - `branches`: `id`, `organization_id`, `code`, `name`, `address`, `phone`, `active`.
 - `warehouses`: `id`, `branch_id`, `code`, `name`, `warehouse_type`, `active`.
-- `user_profiles`: `id` (referencia al usuario autenticado), `full_name`, `document_number`, `phone`, `active`.
+- `user_profiles`: `id` (referencia al usuario autenticado), `username`, `full_name`, `document_number`, `phone`, `active`. `username` es único e identifica al usuario en la interfaz.
 - `organization_members`: `organization_id`, `user_id`, `role`, `branch_id`, `active`.
 - `audit_log`: `id`, `organization_id`, `user_id`, `action`, `table_name`, `record_id`, `old_data`, `new_data`, `created_at`.
 - `app_settings`: `id`, `organization_id`, `key`, `value_json`, `updated_by`.

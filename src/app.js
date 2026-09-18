@@ -21,7 +21,7 @@ function defaultAdministration() {
     organization: { id: organizationId, legal_name: "DIEX INVEL", trade_name: "DIEX INVEL", tax_id: "", currency: "PEN", timezone: "America/Lima", active: true },
     branches: [{ id: branchId, organization_id: organizationId, code: "PRINCIPAL", name: "Local principal", address: "", phone: "", active: true }],
     warehouses: [{ id: warehouseId, organization_id: organizationId, branch_id: branchId, code: "PRINCIPAL", name: "Almacén principal", warehouse_type: "store", active: true }],
-    members: [{ organization_id: organizationId, user_id: "local-admin", role: "admin", branch_id: branchId, warehouse_id: warehouseId, active: true, profile: { id: "local-admin", email: "admin@diex.local", full_name: "Administrador", phone: "", document_number: "", active: true } }],
+    members: [{ organization_id: organizationId, user_id: "local-admin", role: "admin", branch_id: branchId, warehouse_id: warehouseId, active: true, profile: { id: "local-admin", username: "admin", full_name: "Administrador", phone: "", document_number: "", active: true } }],
     invitations: []
   };
 }
@@ -54,6 +54,10 @@ function loadState(storageKey = STORAGE_KEY) {
       loaded.admin.warehouses = Array.isArray(loaded.admin.warehouses) ? loaded.admin.warehouses : [];
       loaded.admin.members = Array.isArray(loaded.admin.members) ? loaded.admin.members : [];
       loaded.admin.invitations = Array.isArray(loaded.admin.invitations) ? loaded.admin.invitations : [];
+      loaded.admin.members.forEach((member) => {
+        member.profile = member.profile || {};
+        if (!member.profile.username && member.profile.email) member.profile.username = member.profile.email.split("@")[0].toLowerCase();
+      });
       return loaded;
     }
   } catch (error) {
@@ -124,7 +128,7 @@ function updateAuthMode() {
   $("#auth-title").textContent = signup ? "Crea el primer usuario" : "Inicia sesión para continuar";
   $("#auth-description").textContent = signup
     ? "La primera cuenta queda asociada como administradora de la organización DIEX INVEL."
-    : "Usa tu cuenta de Supabase para acceder a la operación y a los datos de tu organización.";
+    : "Usa tu usuario y contraseña para acceder a la operación y a los datos de tu organización.";
   $("#auth-name-field").hidden = !signup;
   $("#auth-full-name").required = signup;
   $("#auth-submit").textContent = signup ? "Crear usuario" : "Iniciar sesión";
@@ -198,15 +202,15 @@ async function submitProtectedAuth(event) {
 
   try {
     if (authMode === "signup") {
-      const result = await window.DiexSupabase.signUp($("#auth-email").value.trim(), $("#auth-password").value, $("#auth-full-name").value.trim());
+      const result = await window.DiexSupabase.signUp($("#auth-username").value.trim(), $("#auth-password").value, $("#auth-full-name").value.trim());
       if (!result?.access_token) {
         form.reset();
         authMode = "signin";
-        showAuthGate("Usuario creado. Revisa tu correo para confirmar la cuenta y luego inicia sesión.");
+        showAuthGate("Usuario creado. Ya puedes iniciar sesión.");
         return;
       }
     } else {
-      await window.DiexSupabase.signIn($("#auth-email").value.trim(), $("#auth-password").value);
+      await window.DiexSupabase.signIn($("#auth-username").value.trim(), $("#auth-password").value);
     }
 
     const status = await window.DiexSupabase.connectionStatus();
@@ -264,7 +268,7 @@ function updateRemoteUI(errorMessage = "") {
     return;
   }
   if (connected) {
-    const name = remoteContext.fullName || remoteContext.email || "Usuario";
+    const name = remoteContext.fullName || remoteContext.username || "Usuario";
     const initials = name.split(" ").filter(Boolean).slice(0, 2).map((word) => word[0]).join("").toUpperCase();
     badge.className = "connection-badge connected";
     badge.textContent = "Conectado";
@@ -343,7 +347,7 @@ async function signInRemote(event) {
   const button = $("#remote-signin");
   button.disabled = true;
   try {
-    await window.DiexSupabase.signIn($("#remote-email").value.trim(), $("#remote-password").value);
+    await window.DiexSupabase.signIn($("#remote-username").value.trim(), $("#remote-password").value);
     remoteContext = await window.DiexSupabase.getUserContext();
     updateRemoteUI();
     await refreshAdministration();
@@ -363,7 +367,7 @@ async function signUpRemote() {
   const button = $("#remote-signup");
   button.disabled = true;
   try {
-    const result = await window.DiexSupabase.signUp($("#remote-email").value.trim(), $("#remote-password").value, $("#remote-full-name").value.trim());
+    const result = await window.DiexSupabase.signUp($("#remote-username").value.trim(), $("#remote-password").value, $("#remote-full-name").value.trim());
     if (result?.access_token) {
       remoteContext = await window.DiexSupabase.getUserContext();
       updateRemoteUI();
@@ -371,7 +375,7 @@ async function signUpRemote() {
       showToast("Usuario creado y conectado como administrador.");
       form.reset();
     } else {
-      showToast("Usuario creado. Revisa tu correo para confirmar la cuenta y luego inicia sesión.");
+      showToast("Usuario creado. Ya puedes iniciar sesión.");
     }
   } catch (error) {
     updateRemoteUI(error.message);
@@ -741,12 +745,12 @@ function renderAdministration() {
     const self = profile.id === (remoteContext?.userId || "local-admin");
     const status = member.active ? statusPill("done", "Activo") : statusPill("low", "Inactivo");
     const actions = `${adminActionButton("edit-user", member.user_id, "✎", "Editar usuario")}${adminActionButton("toggle-user", member.user_id, member.active ? "⏸" : "▶", member.active ? "Inactivar usuario" : "Reactivar usuario", `data-active="${member.active}" ${self ? "disabled" : ""}`)}${adminActionButton("delete-user", member.user_id, "×", "Eliminar acceso", self ? "disabled" : "")}`;
-    return `<tr><td><span class="admin-user-name">${esc(profile.full_name || profile.email || "Usuario")}</span><span class="admin-user-email">${esc(profile.email || "Correo no disponible")}</span></td><td>${esc(adminRoleLabels[member.role] || member.role)}</td><td>${esc(adminBranchName(data, member.branch_id))}</td><td>${esc(adminWarehouseName(data, member.warehouse_id))}</td><td>${status}</td><td><div class="admin-actions">${actions}</div></td></tr>`;
+    return `<tr><td><span class="admin-user-name">${esc(profile.full_name || profile.username || "Usuario")}</span><span class="admin-user-email">Usuario: ${esc(profile.username || "No disponible")}</span></td><td>${esc(adminRoleLabels[member.role] || member.role)}</td><td>${esc(adminBranchName(data, member.branch_id))}</td><td>${esc(adminWarehouseName(data, member.warehouse_id))}</td><td>${status}</td><td><div class="admin-actions">${actions}</div></td></tr>`;
   });
   const invitationRows = (data.invitations || []).map((invitation) => {
     const status = invitation.active ? statusPill("pending", "Pendiente") : statusPill("low", "Cancelada");
     const actions = `${adminActionButton("edit-invitation", invitation.id, "✎", "Editar invitación")}${adminActionButton("toggle-invitation", invitation.id, invitation.active ? "⏸" : "▶", invitation.active ? "Cancelar invitación" : "Reactivar invitación", `data-active="${invitation.active}"`)}${adminActionButton("delete-invitation", invitation.id, "×", "Eliminar invitación")}`;
-    return `<tr><td><span class="admin-user-name">${esc(invitation.full_name || invitation.email)}</span><span class="admin-user-email">${esc(invitation.email)} · pendiente de registro</span></td><td>${esc(adminRoleLabels[invitation.role] || invitation.role)}</td><td>${esc(adminBranchName(data, invitation.branch_id))}</td><td>${esc(adminWarehouseName(data, invitation.warehouse_id))}</td><td>${status}</td><td><div class="admin-actions">${actions}</div></td></tr>`;
+    return `<tr><td><span class="admin-user-name">${esc(invitation.full_name || invitation.username)}</span><span class="admin-user-email">Usuario: ${esc(invitation.username)} · pendiente de registro</span></td><td>${esc(adminRoleLabels[invitation.role] || invitation.role)}</td><td>${esc(adminBranchName(data, invitation.branch_id))}</td><td>${esc(adminWarehouseName(data, invitation.warehouse_id))}</td><td>${status}</td><td><div class="admin-actions">${actions}</div></td></tr>`;
   });
   $("#admin-users-table").innerHTML = memberRows.concat(invitationRows).join("") || `<tr><td colspan="6"><div class="admin-empty">Todavía no hay usuarios ni invitaciones.</div></td></tr>`;
 
@@ -776,9 +780,9 @@ function openAdminModal(entity, id = "") {
   const profile = record?.profile || record || {};
   if (entity === "user" || entity === "invitation") {
     const isEdit = Boolean(id);
-    const email = profile.email || record?.email || "";
+    const username = profile.username || record?.username || "";
     const role = record?.role || "sales";
-    editor.innerHTML = `<p class="admin-editor-hint">${isEdit ? "Edita los datos y permisos del usuario. Inactivar conserva su historial y elimina temporalmente el acceso." : "Si el correo ya existe en DIEX, se agregará directamente. Si todavía no tiene cuenta, quedará como invitación pendiente."}</p><div class="admin-editor-grid"><label>Correo electrónico<input id="admin-user-email" type="email" value="${esc(email)}" ${entity === "user" && isEdit ? "readonly" : "required"} /></label><label>Nombre completo<input id="admin-user-name" required value="${esc(profile.full_name || record?.full_name || "")}" /></label><label>Teléfono<input id="admin-user-phone" value="${esc(profile.phone || record?.phone || "")}" /></label><label>Documento<input id="admin-user-document" value="${esc(profile.document_number || "")}" /></label><label>Rol<select id="admin-user-role">${adminRoleOptions(role)}</select></label><label>Local<select id="admin-user-branch">${adminOptions(data.branches, record?.branch_id)}</select></label><label>Almacén<select id="admin-user-warehouse">${adminOptions(data.warehouses, record?.warehouse_id)}</select></label></div>`;
+    editor.innerHTML = `<p class="admin-editor-hint">${isEdit ? "Edita los datos y permisos del usuario. Inactivar conserva su historial y elimina temporalmente el acceso." : "Si el usuario ya existe en DIEX, se agregará directamente. Si todavía no tiene cuenta, quedará como invitación pendiente."}</p><div class="admin-editor-grid"><label>Usuario<input id="admin-user-username" type="text" maxlength="15" pattern="[A-Za-z0-9]{3,15}" value="${esc(username)}" ${entity === "user" && isEdit ? "readonly" : "required"} /></label><label>Nombre completo<input id="admin-user-name" required value="${esc(profile.full_name || record?.full_name || "")}" /></label><label>Teléfono<input id="admin-user-phone" value="${esc(profile.phone || record?.phone || "")}" /></label><label>Documento<input id="admin-user-document" value="${esc(profile.document_number || "")}" /></label><label>Rol<select id="admin-user-role">${adminRoleOptions(role)}</select></label><label>Local<select id="admin-user-branch">${adminOptions(data.branches, record?.branch_id)}</select></label><label>Almacén<select id="admin-user-warehouse">${adminOptions(data.warehouses, record?.warehouse_id)}</select></label></div>`;
     return;
   }
   if (entity === "branch") {
@@ -812,7 +816,7 @@ async function submitAdministrationForm(event) {
   try {
     if (entity === "user" || entity === "invitation") {
       const input = {
-        email: adminFormInput("admin-user-email").toLowerCase(),
+        username: adminFormInput("admin-user-username").toLowerCase(),
         fullName: adminFormInput("admin-user-name"),
         phone: adminFormInput("admin-user-phone"),
         documentNumber: adminFormInput("admin-user-document"),
@@ -820,7 +824,7 @@ async function submitAdministrationForm(event) {
         branchId: $("#admin-user-branch").value || null,
         warehouseId: $("#admin-user-warehouse").value || null
       };
-      if (!input.email) throw new Error("El correo electrónico es obligatorio.");
+      if (!/^[A-Za-z0-9]{3,15}$/.test(input.username)) throw new Error("El usuario debe tener entre 3 y 15 caracteres, solo letras y números.");
       if (source === "remote") {
         if (entity === "user" && id) await window.DiexSupabase.updateAdministrationUser({ userId: id, ...input });
         else if (entity === "invitation" && id) await window.DiexSupabase.updateInvitation(id, input);
@@ -828,7 +832,7 @@ async function submitAdministrationForm(event) {
           const result = await window.DiexSupabase.createAdministrationUser(input);
           await refreshAdministration();
           closeModal();
-          showToast(result.kind === "invitation" ? "Invitación creada. El usuario debe registrarse con ese correo." : "Usuario agregado correctamente.");
+          showToast(result.kind === "invitation" ? "Invitación creada. El usuario debe registrarse con ese nombre." : "Usuario agregado correctamente.");
           return;
         }
         await refreshAdministration();
@@ -843,8 +847,8 @@ async function submitAdministrationForm(event) {
             member.profile = { ...member.profile, full_name: input.fullName, phone: input.phone, document_number: input.documentNumber };
           }
         } else {
-          if (local.members.some((item) => item.profile?.email?.toLowerCase() === input.email)) throw new Error("Ese correo ya está registrado localmente.");
-          local.members.push({ organization_id: local.organization.id, user_id: uid("local-user"), role: input.role, branch_id: input.branchId, warehouse_id: input.warehouseId, active: true, profile: { id: uid("local-profile"), email: input.email, full_name: input.fullName, phone: input.phone, document_number: input.documentNumber, active: true } });
+          if (local.members.some((item) => item.profile?.username?.toLowerCase() === input.username)) throw new Error("Ese usuario ya está registrado localmente.");
+          local.members.push({ organization_id: local.organization.id, user_id: uid("local-user"), role: input.role, branch_id: input.branchId, warehouse_id: input.warehouseId, active: true, profile: { id: uid("local-profile"), username: input.username, full_name: input.fullName, phone: input.phone, document_number: input.documentNumber, active: true } });
         }
         localAdministrationChanged();
       }

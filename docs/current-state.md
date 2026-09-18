@@ -16,12 +16,12 @@
 - Guía de colaboradores sincronizada mediante `.cursor/hooks/sync-agent-guides.mjs`.
 - Migraciones PostgreSQL aplicadas en el proyecto DIEX de Supabase.
 - RLS activo en las 46 tablas públicas y políticas por organización/rol.
-- Pantalla de acceso protegida por Supabase Auth, registro del primer usuario administrador, cierre de sesión y copia remota autenticada.
+- Pantalla de acceso protegida por Supabase Auth, registro del primer usuario administrador mediante nombre de usuario y contraseña validada, cierre de sesión y copia remota autenticada.
 - Rutas de módulos protegidas por sesión.
 - El primer usuario nuevo queda asociado como administrador de DIEX mediante el trigger de Auth.
 - Administración funcional de empresa, usuarios, invitaciones, locales y almacenes desde la ruta #/administration.
-- Alta segura de usuarios por invitación, edición de perfil/rol/local/almacén, baja reversible, reactivación y eliminación de acceso.
-- Migraciones de administración y seguridad aplicadas en Supabase: seis migraciones en total, con cuatro cambios nuevos para usuarios, invitaciones, locales, almacenes y RLS.
+- Alta segura de usuarios por invitación de nombre de usuario, edición de perfil/rol/local/almacén, baja reversible, reactivación y eliminación de acceso.
+- Migraciones de administración y seguridad aplicadas en Supabase: siete migraciones en total, incluyendo el esquema de nombres de usuario, invitaciones y reglas de acceso.
 - Rediseño visual completo en `src/theme.css`, con mayor contraste, controles legibles, colores por módulo y adaptación responsive para PC, tablet y celular.
 
 ## Verificación realizada
