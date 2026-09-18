@@ -18,6 +18,7 @@
 - RLS activo en las 46 tablas públicas y políticas por organización/rol.
 - Panel frontend para registro/inicio de sesión, cierre de sesión y copia remota autenticada.
 - El primer usuario nuevo queda asociado como administrador de DIEX mediante el trigger de Auth.
+- Rediseño visual completo en `src/theme.css`, con mayor contraste, controles legibles, colores por módulo y adaptación responsive para PC, tablet y celular.
 
 ## Verificación realizada
 
@@ -28,6 +29,7 @@
 - Se confirmó que la estructura `docs/`, `src/` y `tests/` existe.
 - Se revisó que `AGENTS.md` y `CLAUDE.md` se mantengan idénticos mediante el hook.
 - Supabase confirmó 2 migraciones aplicadas, 46 tablas con RLS y 173 políticas.
+- Se validó que el tema visual se cargue después de `styles.css`, conservando la lógica existente y permitiendo ajustes visuales sin duplicar la estructura HTML.
 
 ## Limitaciones
 

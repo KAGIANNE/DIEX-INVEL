@@ -6,6 +6,8 @@ Base inicial del sistema de gestión comercial local-first para ventas, caja, ad
 
 Abre [`src/index.html`](src/index.html) directamente en el navegador. La operación local no necesita internet: los datos se guardan primero en `localStorage` del equipo.
 
+La interfaz usa `src/theme.css` como capa visual de la aplicación: colores por módulo y estado, tipografía legible, controles táctiles de al menos 44 px y diseño responsive para PC, tablet y celular.
+
 ## Conexión con Supabase
 
 La aplicación ya está configurada para el proyecto DIEX (`tgibzcuqmrqpyojtvjkf.supabase.co`) con una clave publishable. En `Configuración`:
@@ -30,6 +32,7 @@ La autenticación y el respaldo requieren internet. Si internet se corta, el mod
 - Impresión de tickets térmicos de 80 mm desde Ventas.
 - Migraciones versionadas en `supabase/migrations/` con RLS y datos iniciales.
 - Autenticación y respaldo remoto opcional desde la pantalla de configuración.
+- Interfaz responsive orientada a tienda, con mayor contraste, jerarquía visual y navegación móvil.
 
 ## Comandos de verificación
 

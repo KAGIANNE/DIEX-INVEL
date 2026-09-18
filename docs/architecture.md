@@ -20,6 +20,8 @@ El prototipo de `src/` es estático y se ejecuta en el navegador. `app.js` manti
 
 La interfaz también genera libros `.xlsx` offline con datos tipados y abre un ticket de 80 mm para imprimir una venta desde el navegador. La impresora térmica se configura en Windows y el navegador controla el diálogo de impresión.
 
+La presentación está separada en `src/styles.css` y `src/theme.css`. El tema añade una paleta por módulo, tamaños de texto más visibles, estados de foco accesibles y layouts adaptables para las estaciones de tienda y celulares.
+
 Esta copia remota es un respaldo de transición. No debe considerarse todavía la fuente compartida de verdad para varias PCs, porque dos equipos pueden sobrescribir simultáneamente el mismo snapshot.
 
 ## Límites de los componentes
