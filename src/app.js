@@ -10,6 +10,21 @@ const money = (value) => `S/ ${Number(value || 0).toLocaleString("es-PE", { mini
 const number = (value) => Number(value || 0);
 const esc = (value) => String(value ?? "").replace(/[&<>'"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[character]));
 const shortDate = (value) => new Date(`${value}T12:00:00`).toLocaleDateString("es-PE", { day: "2-digit", month: "short", year: "numeric" });
+const adminRoleLabels = { admin: "Administrador", supervisor: "Supervisor", sales: "Ventas", cashier: "Caja", mobile_sales: "Ventas móviles" };
+const warehouseTypeLabels = { store: "Tienda", backroom: "Depósito", vehicle: "Vehículo", other: "Otro" };
+
+function defaultAdministration() {
+  const organizationId = "local-organization";
+  const branchId = "local-branch-principal";
+  const warehouseId = "local-warehouse-principal";
+  return {
+    organization: { id: organizationId, legal_name: "DIEX INVEL", trade_name: "DIEX INVEL", tax_id: "", currency: "PEN", timezone: "America/Lima", active: true },
+    branches: [{ id: branchId, organization_id: organizationId, code: "PRINCIPAL", name: "Local principal", address: "", phone: "", active: true }],
+    warehouses: [{ id: warehouseId, organization_id: organizationId, branch_id: branchId, code: "PRINCIPAL", name: "Almacén principal", warehouse_type: "store", active: true }],
+    members: [{ organization_id: organizationId, user_id: "local-admin", role: "admin", branch_id: branchId, warehouse_id: warehouseId, active: true, profile: { id: "local-admin", email: "admin@diex.local", full_name: "Administrador", phone: "", document_number: "", active: true } }],
+    invitations: []
+  };
+}
 
 function initialState() {
   return {
@@ -23,33 +38,65 @@ function initialState() {
     purchases: [],
     movements: [],
     nextSale: 1,
-    nextPurchase: 1
+    nextPurchase: 1,
+    admin: defaultAdministration()
   };
 }
 
-function loadState() {
+function loadState(storageKey = STORAGE_KEY) {
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) return JSON.parse(stored);
+    const stored = localStorage.getItem(storageKey);
+    if (stored) {
+      const loaded = JSON.parse(stored);
+      loaded.admin = loaded.admin || defaultAdministration();
+      loaded.admin.organization = loaded.admin.organization || defaultAdministration().organization;
+      loaded.admin.branches = Array.isArray(loaded.admin.branches) ? loaded.admin.branches : [];
+      loaded.admin.warehouses = Array.isArray(loaded.admin.warehouses) ? loaded.admin.warehouses : [];
+      loaded.admin.members = Array.isArray(loaded.admin.members) ? loaded.admin.members : [];
+      loaded.admin.invitations = Array.isArray(loaded.admin.invitations) ? loaded.admin.invitations : [];
+      return loaded;
+    }
   } catch (error) {
     console.warn("No se pudo leer el almacenamiento local", error);
   }
   return initialState();
 }
 
+let activeStorageKey = STORAGE_KEY;
 let state = loadState();
 let saleCart = [];
 let toastTimer;
 let cloudSnapshotTimer;
 let remoteContext = null;
+let administration = null;
+let adminEditor = { entity: "", id: "" };
+const PROTECTED_ROUTES = ["dashboard", "sales", "purchases", "inventory", "products", "reports", "settings", "administration"];
+let authReady = false;
+let authMode = "signin";
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 
 function persist() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  localStorage.setItem(activeStorageKey, JSON.stringify(state));
 }
 
+function loadAuthenticatedState() {
+  if (!remoteContext?.organizationId) return;
+  const scopedKey = STORAGE_KEY + ":" + remoteContext.organizationId;
+  const hasScopedState = Boolean(localStorage.getItem(scopedKey));
+  const hasLegacyState = Boolean(localStorage.getItem(STORAGE_KEY));
+
+  state = hasScopedState
+    ? loadState(scopedKey)
+    : hasLegacyState
+      ? loadState(STORAGE_KEY)
+      : initialState();
+
+  activeStorageKey = scopedKey;
+  localStorage.setItem(activeStorageKey, JSON.stringify(state));
+  if (!hasScopedState && hasLegacyState) localStorage.removeItem(STORAGE_KEY);
+}
 function productById(id) { return state.products.find((product) => product.id === id); }
 function productInitials(product) { return (product?.name || "PR").split(" ").slice(0, 2).map((word) => word[0]).join("").toUpperCase(); }
 function stockStatus(product) { if (number(product.physical) <= 0) return "out"; if (number(product.physical) <= number(product.minStock)) return "low"; return "good"; }
@@ -65,6 +112,128 @@ function showToast(message, type = "success") {
   toastTimer = setTimeout(() => { toast.className = "toast"; }, 3500);
 }
 
+function setAuthGateMessage(message = "", isError = false) {
+  const error = $("#auth-error");
+  error.textContent = message;
+  error.classList.toggle("visible", Boolean(message));
+  error.classList.toggle("error", isError);
+}
+
+function updateAuthMode() {
+  const signup = authMode === "signup";
+  $("#auth-title").textContent = signup ? "Crea el primer usuario" : "Inicia sesión para continuar";
+  $("#auth-description").textContent = signup
+    ? "La primera cuenta queda asociada como administradora de la organización DIEX INVEL."
+    : "Usa tu cuenta de Supabase para acceder a la operación y a los datos de tu organización.";
+  $("#auth-name-field").hidden = !signup;
+  $("#auth-full-name").required = signup;
+  $("#auth-submit").textContent = signup ? "Crear usuario" : "Iniciar sesión";
+  $("#auth-toggle").textContent = signup ? "Ya tengo una cuenta" : "Crear el primer usuario";
+}
+
+function showAuthLoading() {
+  $("#auth-gate").hidden = false;
+  $("#app-shell").hidden = true;
+  $("#auth-loading").hidden = false;
+  $("#auth-form").hidden = true;
+  setAuthGateMessage();
+}
+
+function showAuthGate(message = "", isError = false) {
+  authReady = false;
+  $("#auth-gate").hidden = false;
+  $("#app-shell").hidden = true;
+  $("#auth-loading").hidden = true;
+  $("#auth-form").hidden = !window.DiexSupabase?.isConfigured();
+  setAuthGateMessage(message, isError);
+  updateAuthMode();
+}
+
+function routeFromHash() {
+  const requested = window.location.hash.replace(/^#\/?/, "").split("?")[0];
+  return PROTECTED_ROUTES.includes(requested) ? requested : "dashboard";
+}
+
+function showProtectedApp() {
+  loadAuthenticatedState();
+  authReady = true;
+  $("#auth-gate").hidden = true;
+  $("#app-shell").hidden = false;
+  setSection(routeFromHash());
+}
+
+async function initializeAuthGuard() {
+  if (!window.DiexSupabase?.isConfigured()) {
+    showAuthGate("Falta configurar la URL y la clave publishable de Supabase.", true);
+    return;
+  }
+
+  showAuthLoading();
+  try {
+    const status = await window.DiexSupabase.connectionStatus();
+    remoteContext = status.context;
+    updateRemoteUI();
+    if (status.session && remoteContext) await refreshAdministration();
+    if (!status.session) {
+      showAuthGate();
+      return;
+    }
+    if (!remoteContext) throw new Error("Tu usuario no pertenece a una organización activa.");
+    showProtectedApp();
+  } catch (error) {
+    remoteContext = null;
+    updateRemoteUI(error.message);
+    showAuthGate(error.message, true);
+  }
+}
+
+async function submitProtectedAuth(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  if (!form.reportValidity()) return;
+
+  const button = $("#auth-submit");
+  button.disabled = true;
+  setAuthGateMessage();
+
+  try {
+    if (authMode === "signup") {
+      const result = await window.DiexSupabase.signUp($("#auth-email").value.trim(), $("#auth-password").value, $("#auth-full-name").value.trim());
+      if (!result?.access_token) {
+        form.reset();
+        authMode = "signin";
+        showAuthGate("Usuario creado. Revisa tu correo para confirmar la cuenta y luego inicia sesión.");
+        return;
+      }
+    } else {
+      await window.DiexSupabase.signIn($("#auth-email").value.trim(), $("#auth-password").value);
+    }
+
+    const status = await window.DiexSupabase.connectionStatus();
+    remoteContext = status.context;
+    if (!status.session || !remoteContext) throw new Error("La sesión se creó, pero no hay una organización activa para este usuario.");
+    updateRemoteUI();
+    await refreshAdministration();
+    form.reset();
+    authMode = "signin";
+    showProtectedApp();
+  } catch (error) {
+    remoteContext = null;
+    showAuthGate(error.message, true);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function toggleAuthMode() {
+  authMode = authMode === "signin" ? "signup" : "signin";
+  setAuthGateMessage();
+  updateAuthMode();
+}
+
+function handleRouteChange() {
+  if (authReady) setSection(routeFromHash());
+}
 function updateRemoteUI(errorMessage = "") {
   const client = window.DiexSupabase;
   const configured = Boolean(client?.isConfigured());
@@ -78,6 +247,8 @@ function updateRemoteUI(errorMessage = "") {
   const userName = $("#user-name");
   const userSession = $("#user-session");
   const userAvatar = $("#user-avatar");
+  const adminBadge = $("#admin-access-badge");
+  const adminNote = $("#admin-mode-note");
 
   if (!configured) {
     badge.className = "connection-badge error";
@@ -85,6 +256,11 @@ function updateRemoteUI(errorMessage = "") {
     stateLabel.textContent = "Falta la configuración pública de Supabase.";
     authForm.hidden = true;
     authenticatedActions.hidden = true;
+    if (adminBadge) {
+      adminBadge.className = "connection-badge connected";
+      adminBadge.textContent = "Administrador local";
+    }
+    if (adminNote) adminNote.textContent = "Supabase no está configurado. La administración local sigue disponible en este equipo.";
     return;
   }
   if (connected) {
@@ -100,6 +276,13 @@ function updateRemoteUI(errorMessage = "") {
     userName.textContent = name;
     userSession.textContent = `Supabase · ${remoteContext.role}`;
     userAvatar.textContent = initials || "US";
+    if (adminBadge) {
+      adminBadge.className = `connection-badge ${remoteContext.role === "admin" ? "connected" : "error"}`;
+      adminBadge.textContent = remoteContext.role === "admin" ? "Administrador remoto" : "Acceso restringido";
+    }
+    if (adminNote) adminNote.textContent = remoteContext.role === "admin"
+      ? "Los cambios administrativos se guardan en Supabase y quedan protegidos por RLS."
+      : `Tu rol es ${adminRoleLabels[remoteContext.role] || remoteContext.role}; solo un administrador puede gestionar esta sección.`;
     return;
   }
   badge.className = errorMessage ? "connection-badge error" : "connection-badge";
@@ -112,6 +295,32 @@ function updateRemoteUI(errorMessage = "") {
   userName.textContent = "Administrador";
   userSession.textContent = "Sesión local";
   userAvatar.textContent = "AD";
+  if (adminBadge) {
+    adminBadge.className = "connection-badge connected";
+    adminBadge.textContent = "Administrador local";
+  }
+  if (adminNote) adminNote.textContent = "En modo local, estos datos se guardan en este equipo. Al iniciar sesión como administrador se gestionan directamente en Supabase.";
+}
+
+async function refreshAdministration() {
+  if (!remoteContext) {
+    administration = { source: "local", ...state.admin };
+    renderAdministration();
+    return;
+  }
+  if (remoteContext.role !== "admin") {
+    administration = null;
+    renderAdministration();
+    return;
+  }
+  try {
+    administration = { source: "remote", ...(await window.DiexSupabase.listAdministration()) };
+    renderAdministration();
+  } catch (error) {
+    administration = null;
+    renderAdministration();
+    showToast(`No se pudo cargar la administración: ${error.message}`, "error");
+  }
 }
 
 async function refreshRemoteConnection() {
@@ -120,9 +329,11 @@ async function refreshRemoteConnection() {
     const status = await window.DiexSupabase.connectionStatus();
     remoteContext = status.context;
     updateRemoteUI();
+    await refreshAdministration();
   } catch (error) {
     remoteContext = null;
     updateRemoteUI(error.message);
+    await refreshAdministration();
   }
 }
 
@@ -135,6 +346,7 @@ async function signInRemote(event) {
     await window.DiexSupabase.signIn($("#remote-email").value.trim(), $("#remote-password").value);
     remoteContext = await window.DiexSupabase.getUserContext();
     updateRemoteUI();
+    await refreshAdministration();
     showToast("Sesión de Supabase iniciada.");
     form.reset();
   } catch (error) {
@@ -155,6 +367,7 @@ async function signUpRemote() {
     if (result?.access_token) {
       remoteContext = await window.DiexSupabase.getUserContext();
       updateRemoteUI();
+      await refreshAdministration();
       showToast("Usuario creado y conectado como administrador.");
       form.reset();
     } else {
@@ -171,8 +384,11 @@ async function signUpRemote() {
 async function signOutRemote() {
   await window.DiexSupabase.signOut();
   remoteContext = null;
+  administration = null;
+  showAuthGate("Sesión cerrada. Vuelve a iniciar sesión para acceder a la operación.");
   updateRemoteUI();
-  showToast("Sesión remota cerrada. El modo local continúa disponible.");
+  renderAdministration();
+  showToast("Sesión remota cerrada.");
 }
 
 async function saveRemoteSnapshot(showResult = true) {
@@ -200,6 +416,12 @@ async function loadRemoteSnapshot() {
     if (!window.confirm("Esto reemplazará los datos locales de este equipo por la copia remota. ¿Continuar?")) return;
     if (!Array.isArray(row.value_json.products) || !Array.isArray(row.value_json.sales) || !Array.isArray(row.value_json.purchases)) throw new Error("La copia remota no tiene el formato esperado.");
     state = row.value_json;
+    state.admin = state.admin || defaultAdministration();
+    state.admin.organization = state.admin.organization || defaultAdministration().organization;
+    state.admin.branches = Array.isArray(state.admin.branches) ? state.admin.branches : [];
+    state.admin.warehouses = Array.isArray(state.admin.warehouses) ? state.admin.warehouses : [];
+    state.admin.members = Array.isArray(state.admin.members) ? state.admin.members : [];
+    state.admin.invitations = Array.isArray(state.admin.invitations) ? state.admin.invitations : [];
     saleCart = [];
     persist();
     renderAll();
@@ -209,13 +431,26 @@ async function loadRemoteSnapshot() {
   }
 }
 
-function setSection(section) {
-  $$(".nav-item").forEach((item) => item.classList.toggle("active", item.dataset.section === section));
-  $$(".page-section").forEach((page) => page.classList.toggle("active", page.id === `section-${section}`));
-  const active = $(`.nav-item[data-section="${section}"]`);
+function setSection(section, options = {}) {
+  if (!authReady || !remoteContext) {
+    showAuthGate("Inicia sesión para acceder a esta sección.", true);
+    return false;
+  }
+
+  if (section === "administration" && remoteContext.role !== "admin") {
+    showToast("Solo un administrador puede acceder a Administración.", "error");
+    section = "dashboard";
+  }
+
+  const route = PROTECTED_ROUTES.includes(section) ? section : "dashboard";
+  $$(".nav-item").forEach((item) => item.classList.toggle("active", item.dataset.section === route));
+  $$(".page-section").forEach((page) => page.classList.toggle("active", page.id === "section-" + route));
+  const active = $(".nav-item[data-section='" + route + "']");
   $("#page-title").textContent = active?.textContent.trim() || "Resumen";
   $("#sidebar").classList.remove("open");
+  if (options.updateHash !== false) window.history.replaceState(null, "", "#/" + route);
   window.scrollTo({ top: 0, behavior: "smooth" });
+  return true;
 }
 
 function renderDashboard() {
@@ -326,12 +561,13 @@ function openModal(type) {
   $("#modal-sale").hidden = type !== "sale";
   $("#modal-purchase").hidden = type !== "purchase";
   $("#modal-product").hidden = type !== "product";
-  $("#modal-title").textContent = type === "sale" ? "Nueva venta" : type === "purchase" ? "Registrar compra" : "Nuevo producto";
+  $("#modal-admin").hidden = type !== "admin";
+  $("#modal-title").textContent = type === "sale" ? "Nueva venta" : type === "purchase" ? "Registrar compra" : type === "product" ? "Nuevo producto" : "Administración";
   backdrop.hidden = false;
   if (type === "sale") { saleCart = []; $("#sale-client").value = ""; $("#sale-payment").value = "0"; renderCart(); }
   if (type === "purchase") { $("#purchase-form").reset(); $("#purchase-exchange").value = "1"; }
   if (type === "product") $("#product-form").reset();
-  fillProductSelects();
+  if (type !== "admin") fillProductSelects();
 }
 
 function closeModal() { $("#modal-backdrop").hidden = true; }
@@ -460,7 +696,292 @@ function printSaleTicket(saleId) {
   setTimeout(() => popup.print(), 250);
 }
 
-function renderAll() { renderDashboard(); renderProducts(); renderInventory(); renderSales(); renderPurchases(); renderReports(); fillProductSelects(); }
+function getAdministrationData() {
+  return administration || { source: "local", ...state.admin };
+}
+
+function adminRestricted() {
+  return Boolean(remoteContext && remoteContext.role !== "admin");
+}
+
+function adminBranchName(data, branchId) {
+  return data.branches.find((branch) => branch.id === branchId)?.name || "Sin asignar";
+}
+
+function adminWarehouseName(data, warehouseId) {
+  return data.warehouses.find((warehouse) => warehouse.id === warehouseId)?.name || "Sin asignar";
+}
+
+function adminOptions(items, selected, emptyLabel = "Sin asignar") {
+  return `<option value="">${esc(emptyLabel)}</option>${items.map((item) => `<option value="${esc(item.id)}" ${item.id === selected ? "selected" : ""}>${esc(item.name || item.code)}</option>`).join("")}`;
+}
+
+function adminRoleOptions(selected) {
+  return Object.entries(adminRoleLabels).map(([value, label]) => `<option value="${value}" ${value === selected ? "selected" : ""}>${label}</option>`).join("");
+}
+
+function adminActionButton(action, id, icon, title, extra = "") {
+  return `<button class="row-action" data-admin-action="${action}" data-id="${esc(id)}" ${extra} type="button" title="${esc(title)}" aria-label="${esc(title)}">${icon}</button>`;
+}
+
+function renderAdministration() {
+  const data = getAdministrationData();
+  const section = $("#section-administration");
+  if (!section) return;
+  const restricted = adminRestricted();
+  const organization = data.organization || {};
+  $("#admin-org-legal-name").value = organization.legal_name || "";
+  $("#admin-org-trade-name").value = organization.trade_name || "";
+  $("#admin-org-tax-id").value = organization.tax_id || "";
+  $("#admin-org-currency").value = organization.currency || "PEN";
+  $("#admin-org-timezone").value = organization.timezone || "America/Lima";
+
+  const memberRows = (data.members || []).map((member) => {
+    const profile = member.profile || {};
+    const self = profile.id === (remoteContext?.userId || "local-admin");
+    const status = member.active ? statusPill("done", "Activo") : statusPill("low", "Inactivo");
+    const actions = `${adminActionButton("edit-user", member.user_id, "✎", "Editar usuario")}${adminActionButton("toggle-user", member.user_id, member.active ? "⏸" : "▶", member.active ? "Inactivar usuario" : "Reactivar usuario", `data-active="${member.active}" ${self ? "disabled" : ""}`)}${adminActionButton("delete-user", member.user_id, "×", "Eliminar acceso", self ? "disabled" : "")}`;
+    return `<tr><td><span class="admin-user-name">${esc(profile.full_name || profile.email || "Usuario")}</span><span class="admin-user-email">${esc(profile.email || "Correo no disponible")}</span></td><td>${esc(adminRoleLabels[member.role] || member.role)}</td><td>${esc(adminBranchName(data, member.branch_id))}</td><td>${esc(adminWarehouseName(data, member.warehouse_id))}</td><td>${status}</td><td><div class="admin-actions">${actions}</div></td></tr>`;
+  });
+  const invitationRows = (data.invitations || []).map((invitation) => {
+    const status = invitation.active ? statusPill("pending", "Pendiente") : statusPill("low", "Cancelada");
+    const actions = `${adminActionButton("edit-invitation", invitation.id, "✎", "Editar invitación")}${adminActionButton("toggle-invitation", invitation.id, invitation.active ? "⏸" : "▶", invitation.active ? "Cancelar invitación" : "Reactivar invitación", `data-active="${invitation.active}"`)}${adminActionButton("delete-invitation", invitation.id, "×", "Eliminar invitación")}`;
+    return `<tr><td><span class="admin-user-name">${esc(invitation.full_name || invitation.email)}</span><span class="admin-user-email">${esc(invitation.email)} · pendiente de registro</span></td><td>${esc(adminRoleLabels[invitation.role] || invitation.role)}</td><td>${esc(adminBranchName(data, invitation.branch_id))}</td><td>${esc(adminWarehouseName(data, invitation.warehouse_id))}</td><td>${status}</td><td><div class="admin-actions">${actions}</div></td></tr>`;
+  });
+  $("#admin-users-table").innerHTML = memberRows.concat(invitationRows).join("") || `<tr><td colspan="6"><div class="admin-empty">Todavía no hay usuarios ni invitaciones.</div></td></tr>`;
+
+  $("#admin-branches-table").innerHTML = data.branches.length ? data.branches.map((branch) => `<tr><td><span class="ref">${esc(branch.code)}</span></td><td><strong>${esc(branch.name)}</strong><span class="admin-subtext">${esc(branch.address || "Sin dirección")}</span></td><td>${esc(branch.phone || "Sin teléfono")}</td><td>${statusPill(branch.active ? "done" : "low", branch.active ? "Activo" : "Inactivo")}</td><td><div class="admin-actions">${adminActionButton("edit-branch", branch.id, "✎", "Editar local")}${adminActionButton("toggle-branch", branch.id, branch.active ? "⏸" : "▶", branch.active ? "Inactivar local" : "Reactivar local", `data-active="${branch.active}"`)}${adminActionButton("delete-branch", branch.id, "×", "Eliminar local")}</div></td></tr>`).join("") : `<tr><td colspan="5"><div class="admin-empty">Agrega el primer local.</div></td></tr>`;
+
+  $("#admin-warehouses-table").innerHTML = data.warehouses.length ? data.warehouses.map((warehouse) => `<tr><td><span class="ref">${esc(warehouse.code)}</span></td><td><strong>${esc(warehouse.name)}</strong></td><td>${esc(adminBranchName(data, warehouse.branch_id))}</td><td>${esc(warehouseTypeLabels[warehouse.warehouse_type] || warehouse.warehouse_type)}</td><td>${statusPill(warehouse.active ? "done" : "low", warehouse.active ? "Activo" : "Inactivo")}</td><td><div class="admin-actions">${adminActionButton("edit-warehouse", warehouse.id, "✎", "Editar almacén")}${adminActionButton("toggle-warehouse", warehouse.id, warehouse.active ? "⏸" : "▶", warehouse.active ? "Inactivar almacén" : "Reactivar almacén", `data-active="${warehouse.active}"`)}${adminActionButton("delete-warehouse", warehouse.id, "×", "Eliminar almacén")}</div></td></tr>`).join("") : `<tr><td colspan="6"><div class="admin-empty">Agrega el primer almacén.</div></td></tr>`;
+
+  section.querySelectorAll("button, input, select").forEach((control) => { control.disabled = restricted; });
+  $("#admin-refresh").disabled = false;
+}
+
+function openAdminModal(entity, id = "") {
+  if (adminRestricted()) return showToast("Solo un administrador puede gestionar esta sección.", "error");
+  const data = getAdministrationData();
+  const record = entity === "user"
+    ? data.members.find((member) => member.user_id === id)
+    : entity === "invitation"
+      ? data.invitations.find((invitation) => invitation.id === id)
+      : entity === "branch"
+        ? data.branches.find((branch) => branch.id === id)
+        : entity === "warehouse"
+          ? data.warehouses.find((warehouse) => warehouse.id === id)
+          : null;
+  adminEditor = { entity, id };
+  openModal("admin");
+  const editor = $("#admin-editor");
+  const profile = record?.profile || record || {};
+  if (entity === "user" || entity === "invitation") {
+    const isEdit = Boolean(id);
+    const email = profile.email || record?.email || "";
+    const role = record?.role || "sales";
+    editor.innerHTML = `<p class="admin-editor-hint">${isEdit ? "Edita los datos y permisos del usuario. Inactivar conserva su historial y elimina temporalmente el acceso." : "Si el correo ya existe en DIEX, se agregará directamente. Si todavía no tiene cuenta, quedará como invitación pendiente."}</p><div class="admin-editor-grid"><label>Correo electrónico<input id="admin-user-email" type="email" value="${esc(email)}" ${entity === "user" && isEdit ? "readonly" : "required"} /></label><label>Nombre completo<input id="admin-user-name" required value="${esc(profile.full_name || record?.full_name || "")}" /></label><label>Teléfono<input id="admin-user-phone" value="${esc(profile.phone || record?.phone || "")}" /></label><label>Documento<input id="admin-user-document" value="${esc(profile.document_number || "")}" /></label><label>Rol<select id="admin-user-role">${adminRoleOptions(role)}</select></label><label>Local<select id="admin-user-branch">${adminOptions(data.branches, record?.branch_id)}</select></label><label>Almacén<select id="admin-user-warehouse">${adminOptions(data.warehouses, record?.warehouse_id)}</select></label></div>`;
+    return;
+  }
+  if (entity === "branch") {
+    editor.innerHTML = `<div class="admin-editor-grid"><label>Código<input id="admin-branch-code" required maxlength="20" value="${esc(record?.code || "")}" /></label><label>Nombre del local<input id="admin-branch-name" required value="${esc(record?.name || "")}" /></label><label>Dirección<input id="admin-branch-address" value="${esc(record?.address || "")}" /></label><label>Teléfono<input id="admin-branch-phone" value="${esc(record?.phone || "")}" /></label></div>`;
+    return;
+  }
+  if (entity === "warehouse") {
+    editor.innerHTML = `<div class="admin-editor-grid"><label>Código<input id="admin-warehouse-code" required maxlength="20" value="${esc(record?.code || "")}" /></label><label>Nombre del almacén<input id="admin-warehouse-name" required value="${esc(record?.name || "")}" /></label><label>Local asociado<select id="admin-warehouse-branch" required>${adminOptions(data.branches, record?.branch_id, "Selecciona un local")}</select></label><label>Tipo<select id="admin-warehouse-type"><option value="store" ${record?.warehouse_type === "store" ? "selected" : ""}>Tienda</option><option value="backroom" ${record?.warehouse_type === "backroom" ? "selected" : ""}>Depósito</option><option value="vehicle" ${record?.warehouse_type === "vehicle" ? "selected" : ""}>Vehículo</option><option value="other" ${record?.warehouse_type === "other" ? "selected" : ""}>Otro</option></select></label></div>`;
+  }
+}
+
+function adminFormInput(id) {
+  return document.getElementById(id)?.value.trim() || "";
+}
+
+function localAdministrationChanged() {
+  administration = { source: "local", ...state.admin };
+  persist();
+  renderAdministration();
+}
+
+async function submitAdministrationForm(event) {
+  event.preventDefault();
+  if (!event.currentTarget.reportValidity()) return;
+  const form = event.currentTarget;
+  const data = getAdministrationData();
+  const source = data.source || "local";
+  const { entity, id } = adminEditor;
+  const button = form.querySelector('button[type="submit"]');
+  button.disabled = true;
+  try {
+    if (entity === "user" || entity === "invitation") {
+      const input = {
+        email: adminFormInput("admin-user-email").toLowerCase(),
+        fullName: adminFormInput("admin-user-name"),
+        phone: adminFormInput("admin-user-phone"),
+        documentNumber: adminFormInput("admin-user-document"),
+        role: $("#admin-user-role").value,
+        branchId: $("#admin-user-branch").value || null,
+        warehouseId: $("#admin-user-warehouse").value || null
+      };
+      if (!input.email) throw new Error("El correo electrónico es obligatorio.");
+      if (source === "remote") {
+        if (entity === "user" && id) await window.DiexSupabase.updateAdministrationUser({ userId: id, ...input });
+        else if (entity === "invitation" && id) await window.DiexSupabase.updateInvitation(id, input);
+        else {
+          const result = await window.DiexSupabase.createAdministrationUser(input);
+          await refreshAdministration();
+          closeModal();
+          showToast(result.kind === "invitation" ? "Invitación creada. El usuario debe registrarse con ese correo." : "Usuario agregado correctamente.");
+          return;
+        }
+        await refreshAdministration();
+      } else {
+        const local = state.admin;
+        if (entity === "user" && id) {
+          const member = local.members.find((item) => item.user_id === id);
+          if (member) {
+            member.role = input.role;
+            member.branch_id = input.branchId;
+            member.warehouse_id = input.warehouseId;
+            member.profile = { ...member.profile, full_name: input.fullName, phone: input.phone, document_number: input.documentNumber };
+          }
+        } else {
+          if (local.members.some((item) => item.profile?.email?.toLowerCase() === input.email)) throw new Error("Ese correo ya está registrado localmente.");
+          local.members.push({ organization_id: local.organization.id, user_id: uid("local-user"), role: input.role, branch_id: input.branchId, warehouse_id: input.warehouseId, active: true, profile: { id: uid("local-profile"), email: input.email, full_name: input.fullName, phone: input.phone, document_number: input.documentNumber, active: true } });
+        }
+        localAdministrationChanged();
+      }
+      closeModal();
+      showToast("Usuario actualizado correctamente.");
+      return;
+    }
+
+    if (entity === "branch") {
+      const input = { code: adminFormInput("admin-branch-code"), name: adminFormInput("admin-branch-name"), address: adminFormInput("admin-branch-address"), phone: adminFormInput("admin-branch-phone") };
+      if (source === "remote") {
+        if (id) await window.DiexSupabase.updateAdministrationBranch(id, input);
+        else await window.DiexSupabase.createAdministrationBranch(input);
+        await refreshAdministration();
+      } else {
+        const local = state.admin;
+        if (id) Object.assign(local.branches.find((item) => item.id === id), input);
+        else {
+          if (local.branches.some((item) => item.code.toLowerCase() === input.code.toLowerCase())) throw new Error("Ese código de local ya existe.");
+          local.branches.push({ ...input, id: uid("local-branch"), organization_id: local.organization.id, active: true });
+        }
+        localAdministrationChanged();
+      }
+      closeModal();
+      showToast(id ? "Local actualizado correctamente." : "Local creado correctamente.");
+      return;
+    }
+
+    if (entity === "warehouse") {
+      const input = { code: adminFormInput("admin-warehouse-code"), name: adminFormInput("admin-warehouse-name"), branchId: $("#admin-warehouse-branch").value, type: $("#admin-warehouse-type").value };
+      if (!input.branchId) throw new Error("Selecciona el local asociado.");
+      if (source === "remote") {
+        if (id) await window.DiexSupabase.updateAdministrationWarehouse(id, input);
+        else await window.DiexSupabase.createAdministrationWarehouse(input);
+        await refreshAdministration();
+      } else {
+        const local = state.admin;
+        if (id) Object.assign(local.warehouses.find((item) => item.id === id), { code: input.code, name: input.name, branch_id: input.branchId, warehouse_type: input.type });
+        else {
+          if (local.warehouses.some((item) => item.code.toLowerCase() === input.code.toLowerCase())) throw new Error("Ese código de almacén ya existe.");
+          local.warehouses.push({ id: uid("local-warehouse"), organization_id: local.organization.id, branch_id: input.branchId, code: input.code, name: input.name, warehouse_type: input.type, active: true });
+        }
+        localAdministrationChanged();
+      }
+      closeModal();
+      showToast(id ? "Almacén actualizado correctamente." : "Almacén creado correctamente.");
+    }
+  } catch (error) {
+    showToast(`No se pudo guardar: ${error.message}`, "error");
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function submitAdministrationOrganization(event) {
+  event.preventDefault();
+  if (adminRestricted()) return showToast("Solo un administrador puede editar la empresa.", "error");
+  const input = { legalName: adminFormInput("admin-org-legal-name"), tradeName: adminFormInput("admin-org-trade-name"), taxId: adminFormInput("admin-org-tax-id"), currency: $("#admin-org-currency").value, timezone: $("#admin-org-timezone").value };
+  if (!input.legalName || !input.tradeName) return showToast("Completa la razón social y el nombre comercial.", "error");
+  try {
+    if ((getAdministrationData().source || "local") === "remote") {
+      await window.DiexSupabase.saveAdministrationOrganization(input);
+      await refreshAdministration();
+    } else {
+      Object.assign(state.admin.organization, { legal_name: input.legalName, trade_name: input.tradeName, tax_id: input.taxId, currency: input.currency, timezone: input.timezone });
+      localAdministrationChanged();
+    }
+    showToast("Datos de la empresa guardados.");
+  } catch (error) {
+    showToast(`No se pudo guardar la empresa: ${error.message}`, "error");
+  }
+}
+
+async function handleAdministrationAction(event) {
+  const button = event.target.closest("[data-admin-action]");
+  if (!button) return;
+  if (adminRestricted()) return showToast("Solo un administrador puede gestionar esta sección.", "error");
+  const action = button.dataset.adminAction;
+  const id = button.dataset.id || "";
+  const data = getAdministrationData();
+  const source = data.source || "local";
+  try {
+    if (action === "new-user") return openAdminModal("user");
+    if (action === "new-branch") return openAdminModal("branch");
+    if (action === "new-warehouse") return openAdminModal("warehouse");
+    if (action === "edit-user") return openAdminModal("user", id);
+    if (action === "edit-invitation") return openAdminModal("invitation", id);
+    if (action === "edit-branch") return openAdminModal("branch", id);
+    if (action === "edit-warehouse") return openAdminModal("warehouse", id);
+
+    if (action === "toggle-user" || action === "toggle-branch" || action === "toggle-warehouse" || action === "toggle-invitation") {
+      const active = button.dataset.active !== "true";
+      const label = action.includes("user") ? "usuario" : action.includes("branch") ? "local" : action.includes("warehouse") ? "almacén" : "invitación";
+      if (!window.confirm(`${active ? "Reactivar" : "Inactivar"} ${label}? ${active ? "" : "Se conservará el historial, pero se retirará el acceso."}`)) return;
+      if (source === "remote") {
+        if (action === "toggle-user") await window.DiexSupabase.setAdministrationUserActive(id, active);
+        if (action === "toggle-branch") await window.DiexSupabase.setAdministrationBranchActive(id, active);
+        if (action === "toggle-warehouse") await window.DiexSupabase.setAdministrationWarehouseActive(id, active);
+        if (action === "toggle-invitation") await window.DiexSupabase.setInvitationActive(id, active);
+        await refreshAdministration();
+      } else {
+        if (action === "toggle-user") state.admin.members.find((item) => item.user_id === id).active = active;
+        if (action === "toggle-branch") state.admin.branches.find((item) => item.id === id).active = active;
+        if (action === "toggle-warehouse") state.admin.warehouses.find((item) => item.id === id).active = active;
+        localAdministrationChanged();
+      }
+      showToast(`${label[0].toUpperCase() + label.slice(1)} ${active ? "reactivado" : "inactivado"}.`);
+      return;
+    }
+
+    if (action.startsWith("delete-")) {
+      const label = action.includes("user") ? "el acceso del usuario" : action.includes("branch") ? "el local" : action.includes("warehouse") ? "el almacén" : "la invitación";
+      if (!window.confirm(`¿Eliminar ${label}? Esta acción no se puede deshacer.`)) return;
+      if (source === "remote") {
+        if (action === "delete-user") await window.DiexSupabase.removeAdministrationUser(id);
+        if (action === "delete-branch") await window.DiexSupabase.deleteAdministrationBranch(id);
+        if (action === "delete-warehouse") await window.DiexSupabase.deleteAdministrationWarehouse(id);
+        if (action === "delete-invitation") await window.DiexSupabase.deleteInvitation(id);
+        await refreshAdministration();
+      } else {
+        if (action === "delete-user") state.admin.members = state.admin.members.filter((item) => item.user_id !== id);
+        if (action === "delete-branch") {
+          if (state.admin.warehouses.some((item) => item.branch_id === id)) throw new Error("No puedes eliminar un local con almacenes. Inactívalo o elimina primero sus almacenes.");
+          state.admin.branches = state.admin.branches.filter((item) => item.id !== id);
+        }
+        if (action === "delete-warehouse") state.admin.warehouses = state.admin.warehouses.filter((item) => item.id !== id);
+        if (action === "delete-invitation") state.admin.invitations = state.admin.invitations.filter((item) => item.id !== id);
+        localAdministrationChanged();
+      }
+      showToast(`${label[0].toUpperCase() + label.slice(1)} eliminado.`);
+    }
+  } catch (error) {
+    showToast(`No se pudo completar la acción: ${error.message}`, "error");
+  }
+}
+
+function renderAll() { renderDashboard(); renderProducts(); renderInventory(); renderSales(); renderPurchases(); renderReports(); fillProductSelects(); renderAdministration(); }
 
 function bindEvents() {
   $$(".nav-item").forEach((item) => item.addEventListener("click", () => setSection(item.dataset.section)));
@@ -488,6 +1009,13 @@ function bindEvents() {
   $("#remote-signout")?.addEventListener("click", signOutRemote);
   $("#remote-save")?.addEventListener("click", () => saveRemoteSnapshot(true));
   $("#remote-load")?.addEventListener("click", loadRemoteSnapshot);
+  $("#admin-org-form")?.addEventListener("submit", submitAdministrationOrganization);
+  $("#admin-form")?.addEventListener("submit", submitAdministrationForm);
+  $("#section-administration")?.addEventListener("click", handleAdministrationAction);
+  $("#admin-refresh")?.addEventListener("click", refreshAdministration);
+  $("#auth-form")?.addEventListener("submit", submitProtectedAuth);
+  $("#auth-toggle")?.addEventListener("click", toggleAuthMode);
+  window.addEventListener("hashchange", handleRouteChange);
   document.addEventListener("keydown", (event) => { if (event.key === "Escape" && !$("#modal-backdrop").hidden) closeModal(); });
 }
 
@@ -495,7 +1023,7 @@ function init() {
   $("#today-label").textContent = new Date().toLocaleDateString("es-PE", { weekday: "long", day: "numeric", month: "long" });
   bindEvents();
   renderAll();
-  refreshRemoteConnection();
+  initializeAuthGuard();
 }
 
 document.addEventListener("DOMContentLoaded", init);

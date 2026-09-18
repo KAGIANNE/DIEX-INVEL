@@ -12,11 +12,13 @@ PC servidor local (API + PostgreSQL)
   └── celulares dentro del mismo Wi-Fi (opcional)
 ```
 
-Supabase será una capa opcional para respaldo, sincronización y acceso remoto. No se expondrá PostgreSQL directamente a internet. El acceso remoto deberá pasar por una API segura, VPN o servicios gestionados.
+En el prototipo, Supabase Auth es requerido para proteger el acceso; Supabase sigue siendo opcional como capa de respaldo, sincronización y acceso remoto para la arquitectura local-first futura. No se expondrá PostgreSQL directamente a internet. El acceso remoto deberá pasar por una API segura, VPN o servicios gestionados.
 
 ## Implementación actual
 
-El prototipo de `src/` es estático y se ejecuta en el navegador. `app.js` mantiene los datos operativos en `localStorage` para funcionar sin internet. `supabase-client.js` conecta Auth y `app_settings` mediante REST usando solo la clave publishable; después de iniciar sesión permite guardar o descargar una copia remota autenticada. Las migraciones normalizadas ya están aplicadas en Supabase con RLS por organización.
+El prototipo de src/ es estático y se ejecuta en el navegador. Supabase Auth protege la entrada y todas las rutas de módulos; app.js mantiene los datos operativos en localStorage para funcionar localmente mientras la sesión siga vigente. supabase-client.js conecta Auth y app_settings mediante REST usando solo la clave publishable; después de iniciar sesión permite guardar o descargar una copia remota autenticada.
+
+La sección Administración trabaja con organizations, organization_members, user_profiles, user_invitations, branches y warehouses. Un administrador puede modificar esos registros; los demás roles no reciben esas operaciones por RLS. Los usuarios nuevos se gestionan como invitaciones porque el frontend nunca puede usar service_role para crear usuarios Auth directamente.
 
 La interfaz también genera libros `.xlsx` offline con datos tipados y abre un ticket de 80 mm para imprimir una venta desde el navegador. La impresora térmica se configura en Windows y el navegador controla el diálogo de impresión.
 

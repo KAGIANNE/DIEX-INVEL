@@ -118,7 +118,7 @@
     return request(`/rest/v1/${table}${suffix}`, {
       method,
       headers: { Prefer: "return=representation,resolution=merge-duplicates" },
-      body: JSON.stringify(body)
+      body: body === undefined ? undefined : JSON.stringify(body)
     }, accessToken);
   }
 
@@ -155,6 +155,221 @@
       role: membership.role
     };
     return context;
+  }
+
+  async function requireAdminContext() {
+    const currentContext = await getUserContext();
+    if (!currentContext || currentContext.role !== "admin") throw new Error("Solo un administrador puede gestionar esta sección.");
+    return currentContext;
+  }
+
+  async function listAdministration() {
+    const currentContext = await requireAdminContext();
+    const organizationId = currentContext.organizationId;
+    const [organizations, branches, warehouses, members, profiles, invitations] = await Promise.all([
+      rest("organizations", { select: "id,legal_name,trade_name,tax_id,currency,timezone,active", id: `eq.${organizationId}`, limit: "1" }),
+      rest("branches", { select: "id,code,name,address,phone,active,created_at", organization_id: `eq.${organizationId}`, order: "name.asc" }),
+      rest("warehouses", { select: "id,branch_id,code,name,warehouse_type,active,created_at", organization_id: `eq.${organizationId}`, order: "name.asc" }),
+      rest("organization_members", { select: "organization_id,user_id,role,branch_id,warehouse_id,active,created_at,updated_at", organization_id: `eq.${organizationId}`, order: "created_at.asc" }),
+      rest("user_profiles", { select: "id,email,full_name,document_number,phone,active,created_at,updated_at", order: "full_name.asc" }),
+      rest("user_invitations", { select: "id,email,full_name,phone,role,branch_id,warehouse_id,active,created_at,accepted_at", organization_id: `eq.${organizationId}`, order: "created_at.desc" })
+    ]);
+    const memberIds = new Set((members || []).map((member) => member.user_id));
+    return {
+      organization: organizations?.[0] || currentContext.organization || null,
+      branches: branches || [],
+      warehouses: warehouses || [],
+      members: (members || []).map((member) => ({ ...member, profile: (profiles || []).find((profile) => profile.id === member.user_id) || null })),
+      invitations: invitations || [],
+      profiles: (profiles || []).filter((profile) => memberIds.has(profile.id))
+    };
+  }
+
+  async function createAdministrationUser(input) {
+    const currentContext = await requireAdminContext();
+    const email = String(input.email || "").trim().toLowerCase();
+    if (!email) throw new Error("El correo del usuario es obligatorio.");
+    const existingProfiles = await rest("user_profiles", { select: "id,email,full_name,phone", email: `eq.${email}`, limit: "1" });
+    const profile = existingProfiles?.[0];
+    const memberPayload = {
+      organization_id: currentContext.organizationId,
+      user_id: profile?.id,
+      role: input.role || "sales",
+      branch_id: input.branchId || null,
+      warehouse_id: input.warehouseId || null,
+      active: true
+    };
+
+    if (profile?.id) {
+      const existingMembership = await rest("organization_members", {
+        select: "organization_id,user_id",
+        organization_id: `eq.${currentContext.organizationId}`,
+        user_id: `eq.${profile.id}`,
+        limit: "1"
+      });
+      if (existingMembership?.length) {
+        await restWrite("organization_members", "PATCH", { organization_id: `eq.${currentContext.organizationId}`, user_id: `eq.${profile.id}` }, memberPayload);
+      } else {
+        await restWrite("organization_members", "POST", {}, memberPayload);
+      }
+      await restWrite("user_profiles", "PATCH", { id: `eq.${profile.id}` }, {
+        full_name: input.fullName || profile.full_name || email,
+        phone: input.phone || profile.phone || null,
+        active: true
+      });
+      return { kind: "member", email };
+    }
+
+    await restWrite("user_invitations", "POST", { on_conflict: "organization_id,email" }, {
+      organization_id: currentContext.organizationId,
+      email,
+      full_name: input.fullName || email,
+      phone: input.phone || null,
+      role: input.role || "sales",
+      branch_id: input.branchId || null,
+      warehouse_id: input.warehouseId || null,
+      active: true,
+      invited_by: currentContext.userId
+    });
+    return { kind: "invitation", email };
+  }
+
+  async function updateAdministrationUser(input) {
+    const currentContext = await requireAdminContext();
+    if (!input.userId) throw new Error("Usuario no válido.");
+    if (input.userId === currentContext.userId && input.role !== "admin") throw new Error("No puedes quitarte el rol de administrador desde tu propia sesión.");
+    await restWrite("organization_members", "PATCH", {
+      organization_id: `eq.${currentContext.organizationId}`,
+      user_id: `eq.${input.userId}`
+    }, {
+      role: input.role,
+      branch_id: input.branchId || null,
+      warehouse_id: input.warehouseId || null,
+      active: input.active !== false
+    });
+    await restWrite("user_profiles", "PATCH", { id: `eq.${input.userId}` }, {
+      full_name: input.fullName,
+      phone: input.phone || null,
+      document_number: input.documentNumber || null
+    });
+  }
+
+  async function setAdministrationUserActive(userId, active) {
+    const currentContext = await requireAdminContext();
+    if (userId === currentContext.userId && !active) throw new Error("No puedes inactivar tu propio acceso.");
+    return restWrite("organization_members", "PATCH", {
+      organization_id: `eq.${currentContext.organizationId}`,
+      user_id: `eq.${userId}`
+    }, { active });
+  }
+
+  async function removeAdministrationUser(userId) {
+    const currentContext = await requireAdminContext();
+    if (userId === currentContext.userId) throw new Error("No puedes eliminar tu propio acceso.");
+    return restWrite("organization_members", "DELETE", {
+      organization_id: `eq.${currentContext.organizationId}`,
+      user_id: `eq.${userId}`
+    });
+  }
+
+  async function setInvitationActive(invitationId, active) {
+    await requireAdminContext();
+    return restWrite("user_invitations", "PATCH", { id: `eq.${invitationId}` }, { active });
+  }
+
+  async function updateInvitation(invitationId, input) {
+    const currentContext = await requireAdminContext();
+    return restWrite("user_invitations", "PATCH", {
+      id: `eq.${invitationId}`,
+      organization_id: `eq.${currentContext.organizationId}`
+    }, {
+      email: input.email.trim().toLowerCase(),
+      full_name: input.fullName,
+      phone: input.phone || null,
+      role: input.role,
+      branch_id: input.branchId || null,
+      warehouse_id: input.warehouseId || null
+    });
+  }
+
+  async function deleteInvitation(invitationId) {
+    await requireAdminContext();
+    return restWrite("user_invitations", "DELETE", { id: `eq.${invitationId}` });
+  }
+
+  async function saveAdministrationOrganization(input) {
+    const currentContext = await requireAdminContext();
+    return restWrite("organizations", "PATCH", { id: `eq.${currentContext.organizationId}` }, {
+      legal_name: input.legalName,
+      trade_name: input.tradeName,
+      tax_id: input.taxId || null,
+      currency: input.currency || "PEN",
+      timezone: input.timezone || "America/Lima"
+    });
+  }
+
+  async function createAdministrationBranch(input) {
+    const currentContext = await requireAdminContext();
+    return restWrite("branches", "POST", {}, {
+      organization_id: currentContext.organizationId,
+      code: input.code.trim().toUpperCase(),
+      name: input.name.trim(),
+      address: input.address?.trim() || null,
+      phone: input.phone?.trim() || null,
+      active: true
+    });
+  }
+
+  async function updateAdministrationBranch(id, input) {
+    const currentContext = await requireAdminContext();
+    return restWrite("branches", "PATCH", { id: `eq.${id}`, organization_id: `eq.${currentContext.organizationId}` }, {
+      code: input.code.trim().toUpperCase(),
+      name: input.name.trim(),
+      address: input.address?.trim() || null,
+      phone: input.phone?.trim() || null
+    });
+  }
+
+  async function setAdministrationBranchActive(id, active) {
+    const currentContext = await requireAdminContext();
+    return restWrite("branches", "PATCH", { id: `eq.${id}`, organization_id: `eq.${currentContext.organizationId}` }, { active });
+  }
+
+  async function deleteAdministrationBranch(id) {
+    const currentContext = await requireAdminContext();
+    return restWrite("branches", "DELETE", { id: `eq.${id}`, organization_id: `eq.${currentContext.organizationId}` });
+  }
+
+  async function createAdministrationWarehouse(input) {
+    const currentContext = await requireAdminContext();
+    return restWrite("warehouses", "POST", {}, {
+      organization_id: currentContext.organizationId,
+      branch_id: input.branchId,
+      code: input.code.trim().toUpperCase(),
+      name: input.name.trim(),
+      warehouse_type: input.type || "store",
+      active: true
+    });
+  }
+
+  async function updateAdministrationWarehouse(id, input) {
+    const currentContext = await requireAdminContext();
+    return restWrite("warehouses", "PATCH", { id: `eq.${id}`, organization_id: `eq.${currentContext.organizationId}` }, {
+      branch_id: input.branchId,
+      code: input.code.trim().toUpperCase(),
+      name: input.name.trim(),
+      warehouse_type: input.type || "store"
+    });
+  }
+
+  async function setAdministrationWarehouseActive(id, active) {
+    const currentContext = await requireAdminContext();
+    return restWrite("warehouses", "PATCH", { id: `eq.${id}`, organization_id: `eq.${currentContext.organizationId}` }, { active });
+  }
+
+  async function deleteAdministrationWarehouse(id) {
+    const currentContext = await requireAdminContext();
+    return restWrite("warehouses", "DELETE", { id: `eq.${id}`, organization_id: `eq.${currentContext.organizationId}` });
   }
 
   async function saveLocalSnapshot(state) {
@@ -198,6 +413,23 @@
     getUserContext,
     saveLocalSnapshot,
     loadLocalSnapshot,
+    listAdministration,
+    createAdministrationUser,
+    updateAdministrationUser,
+    setAdministrationUserActive,
+    removeAdministrationUser,
+    setInvitationActive,
+    updateInvitation,
+    deleteInvitation,
+    saveAdministrationOrganization,
+    createAdministrationBranch,
+    updateAdministrationBranch,
+    setAdministrationBranchActive,
+    deleteAdministrationBranch,
+    createAdministrationWarehouse,
+    updateAdministrationWarehouse,
+    setAdministrationWarehouseActive,
+    deleteAdministrationWarehouse,
     connectionStatus,
     snapshotKey
   });

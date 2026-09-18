@@ -13,7 +13,34 @@
     <script src="app.js" defer></script>
   </head>
   <body>
-    <div class="app-shell">
+    <main class="auth-gate" id="auth-gate">
+      <div class="auth-card">
+        <div class="auth-brand">
+          <div class="brand-mark">DI</div>
+          <div>
+            <strong>DIEX INVEL</strong>
+            <span>Gestión comercial</span>
+          </div>
+        </div>
+        <div class="auth-heading">
+          <span class="eyebrow">Acceso protegido</span>
+          <h1 id="auth-title">Inicia sesión para continuar</h1>
+          <p id="auth-description">Usa tu cuenta de Supabase para acceder a la operación y a los datos de tu organización.</p>
+        </div>
+        <div class="auth-loading" id="auth-loading">Comprobando sesión segura…</div>
+        <form class="auth-form" id="auth-form" hidden>
+          <label>Correo electrónico<input id="auth-email" type="email" autocomplete="username" required placeholder="admin@empresa.com" /></label>
+          <label>Contraseña<input id="auth-password" type="password" autocomplete="current-password" minlength="6" required placeholder="Mínimo 6 caracteres" /></label>
+          <label class="auth-name-field" id="auth-name-field" hidden>Nombre completo<input id="auth-full-name" type="text" autocomplete="name" placeholder="Administrador" /></label>
+          <button class="button button-primary auth-submit" id="auth-submit" type="submit">Iniciar sesión</button>
+          <button class="text-button auth-toggle" id="auth-toggle" type="button">Crear el primer usuario</button>
+          <p class="auth-error" id="auth-error" role="alert" aria-live="polite"></p>
+        </form>
+        <p class="auth-security-note">La clave publishable solo identifica este proyecto. Las operaciones remotas se autorizan con tu sesión; nunca se usa una clave secreta en el navegador.</p>
+      </div>
+    </main>
+
+    <div class="app-shell" id="app-shell" hidden>
       <aside class="sidebar" id="sidebar">
         <div class="brand">
           <div class="brand-mark">DI</div>
@@ -42,6 +69,7 @@
           <button class="nav-item" data-section="products" type="button"><span class="nav-icon">◈</span> Productos</button>
           <button class="nav-item" data-section="reports" type="button"><span class="nav-icon">▥</span> Reportes</button>
           <button class="nav-item" data-section="settings" type="button"><span class="nav-icon">⚙</span> Configuración</button>
+          <button class="nav-item" data-section="administration" type="button"><span class="nav-icon">👥</span> Administración</button>
         </nav>
 
         <div class="sidebar-footer">
@@ -115,6 +143,36 @@
             <article class="panel"><div class="panel-heading"><div><h2>Movimientos del Kardex</h2><p>Cada entrada y salida queda registrada con su costo.</p></div></div><div class="table-scroll"><table><thead><tr><th>Fecha</th><th>Referencia</th><th>Producto</th><th>Movimiento</th><th class="align-right">Cantidad</th><th class="align-right">Costo unit.</th><th class="align-right">Valor</th></tr></thead><tbody id="kardex-table"></tbody></table></div></article>
           </section>
 
+          <section class="page-section" id="section-administration">
+            <div class="page-heading compact-heading"><div><span class="eyebrow">Control de acceso y estructura</span><h1>Administración</h1><p>Gestiona usuarios, locales, almacenes y los datos principales de la empresa.</p></div><div class="heading-actions"><span class="connection-badge connected" id="admin-access-badge">Administrador local</span><button class="button button-secondary" id="admin-refresh" type="button">↻ Actualizar</button></div></div>
+            <div class="admin-notice panel" id="admin-mode-note">En modo local, estos datos se guardan en este equipo. Al iniciar sesión como administrador se gestionan directamente en Supabase.</div>
+            <article class="panel admin-card admin-company-card">
+              <div class="panel-heading"><div><h2>Empresa</h2><p>Datos generales que aparecerán en la operación y en futuros documentos.</p></div></div>
+              <form class="admin-form-grid" id="admin-org-form">
+                <label>Razón social<input id="admin-org-legal-name" required /></label>
+                <label>Nombre comercial<input id="admin-org-trade-name" required /></label>
+                <label>RUC / identificación<input id="admin-org-tax-id" /></label>
+                <label>Moneda<select id="admin-org-currency"><option value="PEN">Soles (PEN)</option><option value="USD">Dólares (USD)</option></select></label>
+                <label>Zona horaria<select id="admin-org-timezone"><option value="America/Lima">America/Lima</option><option value="UTC">UTC</option></select></label>
+                <div class="admin-form-actions"><button class="button button-primary" type="submit">Guardar empresa</button></div>
+              </form>
+            </article>
+            <div class="admin-grid">
+              <article class="panel admin-card">
+                <div class="panel-heading"><div><h2>Usuarios y permisos</h2><p>Invita, edita, inactiva, reactiva o elimina accesos.</p></div><button class="button button-primary" data-admin-action="new-user" type="button">+ Agregar usuario</button></div>
+                <div class="admin-card-body"><div class="admin-help">Roles disponibles: administrador, supervisor, ventas, caja y ventas móviles. Una invitación pendiente se activa cuando la persona crea su cuenta.</div><div class="table-scroll"><table class="admin-table"><thead><tr><th>Usuario</th><th>Rol</th><th>Local</th><th>Almacén</th><th>Estado</th><th></th></tr></thead><tbody id="admin-users-table"></tbody></table></div></div>
+              </article>
+              <article class="panel admin-card">
+                <div class="panel-heading"><div><h2>Locales / sedes</h2><p>Define los puntos de venta y sus datos de contacto.</p></div><button class="button button-primary" data-admin-action="new-branch" type="button">+ Agregar local</button></div>
+                <div class="admin-card-body"><div class="table-scroll"><table class="admin-table"><thead><tr><th>Código</th><th>Local</th><th>Contacto</th><th>Estado</th><th></th></tr></thead><tbody id="admin-branches-table"></tbody></table></div></div>
+              </article>
+              <article class="panel admin-card">
+                <div class="panel-heading"><div><h2>Almacenes</h2><p>Asocia cada almacén a un local y controla su disponibilidad.</p></div><button class="button button-primary" data-admin-action="new-warehouse" type="button">+ Agregar almacén</button></div>
+                <div class="admin-card-body"><div class="table-scroll"><table class="admin-table"><thead><tr><th>Código</th><th>Almacén</th><th>Local</th><th>Tipo</th><th>Estado</th><th></th></tr></thead><tbody id="admin-warehouses-table"></tbody></table></div></div>
+              </article>
+            </div>
+          </section>
+
           <section class="page-section" id="section-settings">
             <div class="page-heading compact-heading"><div><span class="eyebrow">Control del sistema</span><h1>Configuración</h1><p>Parámetros iniciales y puntos pendientes de la siguiente fase.</p></div></div>
             <article class="panel connection-panel">
@@ -155,6 +213,12 @@
         </div>
         <div id="modal-product" class="modal-body" hidden>
           <form id="product-form"><div class="form-grid"><label>Código<input id="product-code" required placeholder="P-0001" /></label><label>Nombre del producto<input id="product-name" required placeholder="Ej. Harina premium" /></label><label>Familia<input id="product-family" placeholder="Familia" /></label><label>Marca<input id="product-brand" placeholder="Marca" /></label><label>Presentación base<input id="product-presentation" value="Unidad" /></label><label>Stock físico inicial<input id="product-physical" min="0" step="0.01" type="number" value="0" /></label><label>Stock documentado inicial<input id="product-documented" min="0" step="0.01" type="number" value="0" /></label><label>Stock mínimo<input id="product-min" min="0" step="0.01" type="number" value="5" /></label><label>Costo promedio (S/)<input id="product-cost" min="0" step="0.01" type="number" value="0" /></label><label>Precio unidad (S/)<input id="product-price-unit" min="0" step="0.01" type="number" value="0" /></label><label>Precio docena (S/)<input id="product-price-dozen" min="0" step="0.01" type="number" value="0" /></label><label>Precio pack (S/)<input id="product-price-pack" min="0" step="0.01" type="number" value="0" /></label></div><div class="modal-actions"><button class="button button-secondary" data-close-modal type="button">Cancelar</button><button class="button button-primary" type="submit">Guardar producto</button></div></form>
+        </div>
+        <div id="modal-admin" class="modal-body" hidden>
+          <form id="admin-form">
+            <div id="admin-editor"></div>
+            <div class="modal-actions"><button class="button button-secondary" data-close-modal type="button">Cancelar</button><button class="button button-primary" type="submit">Guardar cambios</button></div>
+          </form>
         </div>
       </div>
     </div>
