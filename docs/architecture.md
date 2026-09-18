@@ -18,6 +18,8 @@ Supabase será una capa opcional para respaldo, sincronización y acceso remoto.
 
 El prototipo de `src/` es estático y se ejecuta en el navegador. `app.js` mantiene los datos operativos en `localStorage` para funcionar sin internet. `supabase-client.js` conecta Auth y `app_settings` mediante REST usando solo la clave publishable; después de iniciar sesión permite guardar o descargar una copia remota autenticada. Las migraciones normalizadas ya están aplicadas en Supabase con RLS por organización.
 
+La interfaz también genera libros `.xlsx` offline con datos tipados y abre un ticket de 80 mm para imprimir una venta desde el navegador. La impresora térmica se configura en Windows y el navegador controla el diálogo de impresión.
+
 Esta copia remota es un respaldo de transición. No debe considerarse todavía la fuente compartida de verdad para varias PCs, porque dos equipos pueden sobrescribir simultáneamente el mismo snapshot.
 
 ## Límites de los componentes

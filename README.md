@@ -26,6 +26,8 @@ La autenticación y el respaldo requieren internet. Si internet se corta, el mod
 - Ventas, boletas, facturas, notas de pedido y cotizaciones.
 - Pagos parciales, saldos y Kardex con promedio ponderado.
 - Exportación CSV de catálogo y Kardex.
+- Exportación real `.xlsx` con productos, ventas, compras y Kardex.
+- Impresión de tickets térmicos de 80 mm desde Ventas.
 - Migraciones versionadas en `supabase/migrations/` con RLS y datos iniciales.
 - Autenticación y respaldo remoto opcional desde la pantalla de configuración.
 
@@ -33,6 +35,7 @@ La autenticación y el respaldo requieren internet. Si internet se corta, el mod
 
 - `node --check src/app.js` valida la lógica de la interfaz.
 - `node --check src/supabase-client.js` valida el adaptador de conexión.
+- `node --check src/excel-export.js` valida el exportador XLSX offline.
 - `supabase db push --project-ref tgibzcuqmrqpyojtvjkf` aplica las migraciones pendientes desde `supabase/migrations/`.
 
 ## Estructura documental
@@ -44,6 +47,6 @@ La autenticación y el respaldo requieren internet. Si internet se corta, el mod
 
 ## Próxima fase
 
-La base de datos y sus migraciones ya están aplicadas. La siguiente fase es extraer la lógica a una API local con PostgreSQL compartido por sede, conectar ventas/compras/caja de forma transaccional y preparar el instalador para las PCs.
+La base de datos, la impresión térmica y la exportación Excel ya están implementadas. La siguiente fase es extraer la lógica a una API local con PostgreSQL compartido por sede, conectar ventas/compras/caja de forma transaccional y preparar el instalador para las PCs.
 
 Este prototipo no debe usarse todavía como sistema contable ni emisor oficial.

@@ -10,6 +10,8 @@
 - Pagos parciales y cálculo de saldo pendiente.
 - Stock físico/documentado y movimientos de Kardex.
 - Exportación CSV de catálogo y Kardex.
+- Exportación Excel `.xlsx` con hojas de productos, ventas, compras y Kardex.
+- Impresión de tickets de venta en formato térmico de 80 mm desde la tabla de Ventas.
 - Persistencia temporal mediante `localStorage`.
 - Guía de colaboradores sincronizada mediante `.cursor/hooks/sync-agent-guides.mjs`.
 - Migraciones PostgreSQL aplicadas en el proyecto DIEX de Supabase.
@@ -21,13 +23,15 @@
 
 - `node --check src/app.js` pasó correctamente.
 - `node --check src/supabase-client.js` pasó correctamente.
+- `node --check src/excel-export.js` pasó correctamente.
+- Se generó un XLSX de prueba y se verificó su estructura ZIP, estilos, libro y hoja.
 - Se confirmó que la estructura `docs/`, `src/` y `tests/` existe.
 - Se revisó que `AGENTS.md` y `CLAUDE.md` se mantengan idénticos mediante el hook.
 - Supabase confirmó 2 migraciones aplicadas, 46 tablas con RLS y 173 políticas.
 
 ## Limitaciones
 
-No hay todavía API/servidor local compartido, instalador de Windows, sincronización transaccional multi-PC, clientes/proveedores persistentes desde la interfaz, impresión térmica, Excel nativo ni integración SUNAT. Supabase requiere internet para iniciar sesión y guardar/descargar la copia; la operación local con `localStorage` funciona sin internet. La copia remota es un respaldo JSON y la última PC que la guarda reemplaza la anterior.
+No hay todavía API/servidor local compartido, instalador de Windows, sincronización transaccional multi-PC, clientes/proveedores persistentes desde la interfaz ni integración SUNAT. La impresión depende de que Windows tenga configurada la impresora; el navegador muestra el diálogo de impresión. Supabase requiere internet para iniciar sesión y guardar/descargar la copia; la operación local con `localStorage` funciona sin internet. La copia remota es un respaldo JSON y la última PC que la guarda reemplaza la anterior.
 
 ## Próximos hitos
 

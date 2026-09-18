@@ -269,7 +269,7 @@ function renderSales() {
   const status = $("#sales-status-filter")?.value || "all";
   const type = $("#sales-type-filter")?.value || "all";
   const sales = state.sales.filter((sale) => { const paid = number(sale.payment) >= number(sale.total); return [sale.reference, sale.client].join(" ").toLowerCase().includes(query) && (status === "all" || (status === "paid" && paid) || (status === "pending" && !paid)) && (type === "all" || sale.type === type); }).sort((a, b) => b.date.localeCompare(a.date));
-  $("#sales-table").innerHTML = sales.length ? sales.map((sale) => { const paid = number(sale.payment) >= number(sale.total); return `<tr><td><span class="ref">${esc(sale.reference)}</span></td><td><strong>${esc(sale.client)}</strong><small>${sale.lines.length} línea${sale.lines.length === 1 ? "" : "s"}</small></td><td>${esc(documentLabels[sale.type] || sale.type)}</td><td>${shortDate(sale.date)}</td><td class="align-right">${money(sale.total)}</td><td>${statusPill(paid ? "paid" : "pending", paid ? "Pagada" : `Saldo ${money(sale.total - sale.payment)}`)}</td><td><button class="row-action" type="button" title="Detalle disponible en siguiente fase">⋯</button></td></tr>`; }).join("") : `<tr><td colspan="7"><div class="empty-state">No hay ventas que coincidan con el filtro.</div></td></tr>`;
+  $("#sales-table").innerHTML = sales.length ? sales.map((sale) => { const paid = number(sale.payment) >= number(sale.total); return `<tr><td><span class="ref">${esc(sale.reference)}</span></td><td><strong>${esc(sale.client)}</strong><small>${sale.lines.length} línea${sale.lines.length === 1 ? "" : "s"}</small></td><td>${esc(documentLabels[sale.type] || sale.type)}</td><td>${shortDate(sale.date)}</td><td class="align-right">${money(sale.total)}</td><td>${statusPill(paid ? "paid" : "pending", paid ? "Pagada" : `Saldo ${money(sale.total - sale.payment)}`)}</td><td><button class="row-action print-sale" data-sale-id="${esc(sale.id)}" type="button" title="Imprimir ticket térmico" aria-label="Imprimir ticket térmico">⎙</button></td></tr>`; }).join("") : `<tr><td colspan="7"><div class="empty-state">No hay ventas que coincidan con el filtro.</div></td></tr>`;
 }
 
 function renderPurchases() {
@@ -402,14 +402,63 @@ function recordProduct(event) {
   showToast(`${product.name} agregado al catálogo.`);
 }
 
-function exportCSV(filename, rows) {
-  const content = rows.map((row) => row.map((cell) => `"${String(cell ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
-  const blob = new Blob(["\ufeff" + content], { type: "text/csv;charset=utf-8" });
-  const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = filename; link.click(); URL.revokeObjectURL(link.href);
+function spreadsheetDate(value) {
+  const date = new Date(`${value}T00:00:00Z`);
+  return Number.isNaN(date.valueOf()) ? value : date;
 }
 
-function exportProducts() { exportCSV("productos-diex-invel.csv", [["Código", "Producto", "Familia", "Marca", "Stock físico", "Stock documentado", "Costo promedio", "Precio unidad"], ...state.products.map((product) => [product.code, product.name, product.family, product.brand, product.physical, product.documented, product.cost, priceFor(product, "unidad")])]); showToast("Catálogo exportado en CSV."); }
-function exportKardex() { exportCSV("kardex-diex-invel.csv", [["Fecha", "Referencia", "Producto", "Movimiento", "Cantidad", "Costo unitario", "Valor"], ...state.movements.map((movement) => [movement.date, movement.reference, productById(movement.productId)?.name || "", movement.direction === "in" ? "Entrada" : "Salida", movement.quantity, movement.unitCost, movement.value])]); showToast("Kardex exportado en CSV."); }
+function productSpreadsheetRows() {
+  return [["Código", "Producto", "Familia", "Marca", "Presentación", "Stock físico", "Stock documentado", "Costo promedio", "Precio unidad", "Precio docena", "Precio pack"], ...state.products.map((product) => [product.code, product.name, product.family, product.brand, product.presentation, number(product.physical), number(product.documented), number(product.cost), priceFor(product, "unidad"), priceFor(product, "docena"), priceFor(product, "pack")])];
+}
+
+function salesSpreadsheetRows() {
+  return [["Referencia", "Cliente", "Documento", "Fecha", "Total", "Pago", "Saldo", "Estado"], ...state.sales.map((sale) => { const balance = Math.max(0, number(sale.total) - number(sale.payment)); return [sale.reference, sale.client, documentLabels[sale.type] || sale.type, spreadsheetDate(sale.date), number(sale.total), number(sale.payment), balance, balance ? "Pendiente" : "Pagada"]; })];
+}
+
+function purchasesSpreadsheetRows() {
+  return [["Referencia", "Proveedor", "Producto", "Documento", "Fecha", "Cantidad", "Moneda", "Costo unitario", "Costo en soles", "Total"], ...state.purchases.map((purchase) => [purchase.reference, purchase.supplier, productById(purchase.productId)?.name || "Producto eliminado", documentLabels[purchase.type] || purchase.type, spreadsheetDate(purchase.date), number(purchase.quantity), purchase.currency, number(purchase.cost), number(purchase.costInSoles), number(purchase.total)])];
+}
+
+function kardexSpreadsheetRows() {
+  return [["Fecha", "Referencia", "Producto", "Movimiento", "Cantidad", "Costo unitario", "Valor"], ...state.movements.map((movement) => [spreadsheetDate(movement.date), movement.reference, productById(movement.productId)?.name || "Producto eliminado", movement.direction === "in" ? "Entrada" : "Salida", number(movement.quantity), number(movement.unitCost), number(movement.value)])];
+}
+
+function exportWorkbook(filename, sheets, message) {
+  if (!window.DiexExcel) return showToast("El exportador Excel no está disponible.", "error");
+  try {
+    window.DiexExcel.downloadWorkbook(filename, sheets);
+    showToast(message);
+  } catch (error) {
+    showToast(`No se pudo exportar Excel: ${error.message}`, "error");
+  }
+}
+
+function exportProducts() {
+  exportWorkbook("productos-diex-invel.xlsx", [{ name: "Productos", rows: productSpreadsheetRows(), widths: [16, 34, 18, 18, 18, 14, 18, 16, 16, 16, 16], numberColumns: [5, 6], currencyColumns: [7, 8, 9, 10] }], "Catálogo exportado en Excel.");
+}
+
+function exportKardex() {
+  exportWorkbook("reporte-diex-invel.xlsx", [
+    { name: "Productos", rows: productSpreadsheetRows(), widths: [16, 34, 18, 18, 18, 14, 18, 16, 16, 16, 16], numberColumns: [5, 6], currencyColumns: [7, 8, 9, 10] },
+    { name: "Ventas", rows: salesSpreadsheetRows(), widths: [16, 28, 18, 14, 14, 14, 14, 14], currencyColumns: [4, 5, 6] },
+    { name: "Compras", rows: purchasesSpreadsheetRows(), widths: [16, 26, 28, 18, 14, 12, 12, 16, 16, 14], numberColumns: [5], currencyColumns: [7, 8, 9] },
+    { name: "Kardex", rows: kardexSpreadsheetRows(), widths: [14, 16, 30, 16, 14, 16, 14], numberColumns: [4], currencyColumns: [5, 6] }
+  ], "Reporte completo exportado en Excel.");
+}
+
+function printSaleTicket(saleId) {
+  const sale = state.sales.find((item) => item.id === saleId);
+  if (!sale) return showToast("No se encontró la venta para imprimir.", "error");
+  const popup = window.open("", "diex-invel-ticket", "width=420,height=720");
+  if (!popup) return showToast("El navegador bloqueó la ventana de impresión. Permite ventanas emergentes para DIEX INVEL.", "error");
+  const lineRows = sale.lines.map((line) => `<tr><td>${esc(line.name)}<small>${number(line.quantity)} ${esc(line.unit)} · ${money(line.unitPrice)}</small></td><td>${money(line.amount)}</td></tr>`).join("");
+  const balance = Math.max(0, number(sale.total) - number(sale.payment));
+  popup.document.write(`<!doctype html><html lang="es"><head><meta charset="utf-8"><title>${esc(sale.reference)} · DIEX INVEL</title><style>@page{size:80mm auto;margin:0}*{box-sizing:border-box}html,body{width:80mm;margin:0;padding:0;background:#fff;color:#111;font-family:Arial,Helvetica,sans-serif}.ticket{width:80mm;padding:4mm;font-size:11px}.center{text-align:center}.business{font-size:16px;font-weight:700;letter-spacing:.04em}.muted{color:#555;font-size:10px}.rule{border-top:1px dashed #111;margin:3mm 0}.meta{display:flex;justify-content:space-between;gap:8px;font-size:10px}.meta span:last-child{text-align:right}table{width:100%;border-collapse:collapse;margin-top:3mm}th{border-bottom:1px solid #111;text-align:left;font-size:10px}th:last-child,td:last-child{text-align:right}td{padding:2mm 0;vertical-align:top}td small{display:block;margin-top:1mm;color:#555;font-size:9px}.totals{margin-top:2mm}.total{font-size:15px;font-weight:700}.footer{margin-top:5mm;text-align:center;font-size:10px}</style></head><body><main class="ticket"><div class="center business">DIEX INVEL</div><div class="center muted">Gestión comercial</div><div class="rule"></div><div class="meta"><span>Referencia</span><strong>${esc(sale.reference)}</strong></div><div class="meta"><span>Fecha</span><span>${esc(shortDate(sale.date))}</span></div><div class="meta"><span>Cliente</span><span>${esc(sale.client)}</span></div><div class="rule"></div><table><thead><tr><th>Detalle</th><th>Importe</th></tr></thead><tbody>${lineRows}</tbody></table><div class="rule"></div><div class="meta totals"><span>Total</span><span class="total">${money(sale.total)}</span></div><div class="meta"><span>Pago recibido</span><span>${money(sale.payment)}</span></div><div class="meta"><span>Saldo</span><span>${money(balance)}</span></div><div class="footer">Gracias por su compra</div></main></body></html>`);
+  popup.document.close();
+  popup.focus();
+  popup.onafterprint = () => popup.close();
+  setTimeout(() => popup.print(), 250);
+}
 
 function renderAll() { renderDashboard(); renderProducts(); renderInventory(); renderSales(); renderPurchases(); renderReports(); fillProductSelects(); }
 
@@ -424,6 +473,10 @@ function bindEvents() {
   $("#sale-form").addEventListener("submit", recordSale);
   $("#purchase-form").addEventListener("submit", recordPurchase);
   $("#product-form").addEventListener("submit", recordProduct);
+  $("#sales-table").addEventListener("click", (event) => {
+    const button = event.target.closest(".print-sale");
+    if (button) printSaleTicket(button.dataset.saleId);
+  });
   $("#sale-product").addEventListener("change", updateSaleUnits);
   $("#sale-payment").addEventListener("input", renderCart);
   $("#sale-cart").addEventListener("click", (event) => { const button = event.target.closest(".remove-line"); if (!button) return; saleCart.splice(number(button.dataset.index), 1); renderCart(); });
