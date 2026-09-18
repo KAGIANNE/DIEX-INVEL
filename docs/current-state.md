@@ -20,8 +20,10 @@
 - Rutas de módulos protegidas por sesión.
 - El primer usuario nuevo queda asociado como administrador de DIEX mediante el trigger de Auth.
 - Administración funcional de empresa, usuarios, invitaciones, locales y almacenes desde la ruta #/administration.
-- Alta segura de usuarios por invitación de nombre de usuario, edición de perfil/rol/local/almacén, baja reversible, reactivación y eliminación de acceso.
-- Migraciones de administración y seguridad aplicadas en Supabase: siete migraciones en total, incluyendo el esquema de nombres de usuario, invitaciones y reglas de acceso.
+- Creación de usuarios desde Administración con contraseña inicial, edición de perfil/rol/local/almacén, activación, inactivación y eliminación permanente mediante Edge Functions protegidas.
+- Eliminación permanente de locales y almacenes con confirmación y respeto de las relaciones entre locales y almacenes.
+- Edge Functions desplegadas: `create-user-by-admin` y `delete-user-by-admin`.
+- Migraciones de administración y seguridad aplicadas en Supabase: ocho migraciones en total, incluyendo el esquema de nombres de usuario, invitaciones y reglas de acceso.
 - Rediseño visual completo en `src/theme.css`, con mayor contraste, controles legibles, colores por módulo y adaptación responsive para PC, tablet y celular.
 
 ## Verificación realizada

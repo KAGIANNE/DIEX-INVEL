@@ -142,6 +142,13 @@
     storeSession(null);
   }
 
+  async function callFunction(name, payload) {
+    return request(`/functions/v1/${name}`, {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  }
+
   async function rest(table, params = {}, accessToken) {
     const search = new URLSearchParams();
     Object.entries(params).forEach(([key, value]) => search.set(key, value));
@@ -257,19 +264,17 @@
       return { kind: "member", username };
     }
 
-    await restWrite("user_invitations", "POST", { on_conflict: "organization_id,email" }, {
-      organization_id: currentContext.organizationId,
+    validatePassword(input.password);
+    const created = await callFunction("create-user-by-admin", {
       username,
-      email: authEmailForUsername(username),
-      full_name: input.fullName || username,
+      password: input.password,
+      fullName: input.fullName || username,
       phone: input.phone || null,
       role: input.role || "sales",
-      branch_id: input.branchId || null,
-      warehouse_id: input.warehouseId || null,
-      active: true,
-      invited_by: currentContext.userId
+      branchId: input.branchId || null,
+      warehouseId: input.warehouseId || null
     });
-    return { kind: "invitation", username };
+    return { kind: "member", username, userId: created?.user?.id };
   }
 
   async function updateAdministrationUser(input) {
@@ -304,10 +309,7 @@
   async function removeAdministrationUser(userId) {
     const currentContext = await requireAdminContext();
     if (userId === currentContext.userId) throw new Error("No puedes eliminar tu propio acceso.");
-    return restWrite("organization_members", "DELETE", {
-      organization_id: `eq.${currentContext.organizationId}`,
-      user_id: `eq.${userId}`
-    });
+    return callFunction("delete-user-by-admin", { userId });
   }
 
   async function setInvitationActive(invitationId, active) {

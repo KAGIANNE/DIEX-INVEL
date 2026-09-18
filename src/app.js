@@ -744,7 +744,7 @@ function renderAdministration() {
     const profile = member.profile || {};
     const self = profile.id === (remoteContext?.userId || "local-admin");
     const status = member.active ? statusPill("done", "Activo") : statusPill("low", "Inactivo");
-    const actions = `${adminActionButton("edit-user", member.user_id, "✎", "Editar usuario")}${adminActionButton("toggle-user", member.user_id, member.active ? "⏸" : "▶", member.active ? "Inactivar usuario" : "Reactivar usuario", `data-active="${member.active}" ${self ? "disabled" : ""}`)}${adminActionButton("delete-user", member.user_id, "×", "Eliminar acceso", self ? "disabled" : "")}`;
+    const actions = `${adminActionButton("edit-user", member.user_id, "✎", "Editar usuario")}${adminActionButton("toggle-user", member.user_id, member.active ? "⏸" : "▶", member.active ? "Inactivar usuario" : "Reactivar usuario", `data-active="${member.active}" ${self ? "disabled" : ""}`)}${adminActionButton("delete-user", member.user_id, "×", "Eliminar permanentemente el usuario", self ? "disabled" : "")}`;
     return `<tr><td><span class="admin-user-name">${esc(profile.full_name || profile.username || "Usuario")}</span><span class="admin-user-email">Usuario: ${esc(profile.username || "No disponible")}</span></td><td>${esc(adminRoleLabels[member.role] || member.role)}</td><td>${esc(adminBranchName(data, member.branch_id))}</td><td>${esc(adminWarehouseName(data, member.warehouse_id))}</td><td>${status}</td><td><div class="admin-actions">${actions}</div></td></tr>`;
   });
   const invitationRows = (data.invitations || []).map((invitation) => {
@@ -754,9 +754,9 @@ function renderAdministration() {
   });
   $("#admin-users-table").innerHTML = memberRows.concat(invitationRows).join("") || `<tr><td colspan="6"><div class="admin-empty">Todavía no hay usuarios ni invitaciones.</div></td></tr>`;
 
-  $("#admin-branches-table").innerHTML = data.branches.length ? data.branches.map((branch) => `<tr><td><span class="ref">${esc(branch.code)}</span></td><td><strong>${esc(branch.name)}</strong><span class="admin-subtext">${esc(branch.address || "Sin dirección")}</span></td><td>${esc(branch.phone || "Sin teléfono")}</td><td>${statusPill(branch.active ? "done" : "low", branch.active ? "Activo" : "Inactivo")}</td><td><div class="admin-actions">${adminActionButton("edit-branch", branch.id, "✎", "Editar local")}${adminActionButton("toggle-branch", branch.id, branch.active ? "⏸" : "▶", branch.active ? "Inactivar local" : "Reactivar local", `data-active="${branch.active}"`)}${adminActionButton("delete-branch", branch.id, "×", "Eliminar local")}</div></td></tr>`).join("") : `<tr><td colspan="5"><div class="admin-empty">Agrega el primer local.</div></td></tr>`;
+  $("#admin-branches-table").innerHTML = data.branches.length ? data.branches.map((branch) => `<tr><td><span class="ref">${esc(branch.code)}</span></td><td><strong>${esc(branch.name)}</strong><span class="admin-subtext">${esc(branch.address || "Sin dirección")}</span></td><td>${esc(branch.phone || "Sin teléfono")}</td><td>${statusPill(branch.active ? "done" : "low", branch.active ? "Activo" : "Inactivo")}</td><td><div class="admin-actions">${adminActionButton("edit-branch", branch.id, "✎", "Editar local")}${adminActionButton("toggle-branch", branch.id, branch.active ? "⏸" : "▶", branch.active ? "Inactivar local" : "Reactivar local", `data-active="${branch.active}"`)}${adminActionButton("delete-branch", branch.id, "×", "Eliminar permanentemente el local")}</div></td></tr>`).join("") : `<tr><td colspan="5"><div class="admin-empty">Agrega el primer local.</div></td></tr>`;
 
-  $("#admin-warehouses-table").innerHTML = data.warehouses.length ? data.warehouses.map((warehouse) => `<tr><td><span class="ref">${esc(warehouse.code)}</span></td><td><strong>${esc(warehouse.name)}</strong></td><td>${esc(adminBranchName(data, warehouse.branch_id))}</td><td>${esc(warehouseTypeLabels[warehouse.warehouse_type] || warehouse.warehouse_type)}</td><td>${statusPill(warehouse.active ? "done" : "low", warehouse.active ? "Activo" : "Inactivo")}</td><td><div class="admin-actions">${adminActionButton("edit-warehouse", warehouse.id, "✎", "Editar almacén")}${adminActionButton("toggle-warehouse", warehouse.id, warehouse.active ? "⏸" : "▶", warehouse.active ? "Inactivar almacén" : "Reactivar almacén", `data-active="${warehouse.active}"`)}${adminActionButton("delete-warehouse", warehouse.id, "×", "Eliminar almacén")}</div></td></tr>`).join("") : `<tr><td colspan="6"><div class="admin-empty">Agrega el primer almacén.</div></td></tr>`;
+  $("#admin-warehouses-table").innerHTML = data.warehouses.length ? data.warehouses.map((warehouse) => `<tr><td><span class="ref">${esc(warehouse.code)}</span></td><td><strong>${esc(warehouse.name)}</strong></td><td>${esc(adminBranchName(data, warehouse.branch_id))}</td><td>${esc(warehouseTypeLabels[warehouse.warehouse_type] || warehouse.warehouse_type)}</td><td>${statusPill(warehouse.active ? "done" : "low", warehouse.active ? "Activo" : "Inactivo")}</td><td><div class="admin-actions">${adminActionButton("edit-warehouse", warehouse.id, "✎", "Editar almacén")}${adminActionButton("toggle-warehouse", warehouse.id, warehouse.active ? "⏸" : "▶", warehouse.active ? "Inactivar almacén" : "Reactivar almacén", `data-active="${warehouse.active}"`)}${adminActionButton("delete-warehouse", warehouse.id, "×", "Eliminar permanentemente el almacén")}</div></td></tr>`).join("") : `<tr><td colspan="6"><div class="admin-empty">Agrega el primer almacén.</div></td></tr>`;
 
   section.querySelectorAll("button, input, select").forEach((control) => { control.disabled = restricted; });
   $("#admin-refresh").disabled = false;
@@ -782,7 +782,10 @@ function openAdminModal(entity, id = "") {
     const isEdit = Boolean(id);
     const username = profile.username || record?.username || "";
     const role = record?.role || "sales";
-    editor.innerHTML = `<p class="admin-editor-hint">${isEdit ? "Edita los datos y permisos del usuario. Inactivar conserva su historial y elimina temporalmente el acceso." : "Si el usuario ya existe en DIEX, se agregará directamente. Si todavía no tiene cuenta, quedará como invitación pendiente."}</p><div class="admin-editor-grid"><label>Usuario<input id="admin-user-username" type="text" maxlength="15" pattern="[A-Za-z0-9]{3,15}" value="${esc(username)}" ${entity === "user" && isEdit ? "readonly" : "required"} /></label><label>Nombre completo<input id="admin-user-name" required value="${esc(profile.full_name || record?.full_name || "")}" /></label><label>Teléfono<input id="admin-user-phone" value="${esc(profile.phone || record?.phone || "")}" /></label><label>Documento<input id="admin-user-document" value="${esc(profile.document_number || "")}" /></label><label>Rol<select id="admin-user-role">${adminRoleOptions(role)}</select></label><label>Local<select id="admin-user-branch">${adminOptions(data.branches, record?.branch_id)}</select></label><label>Almacén<select id="admin-user-warehouse">${adminOptions(data.warehouses, record?.warehouse_id)}</select></label></div>`;
+    const passwordField = entity === "user" && !isEdit
+      ? `<label>Contraseña inicial<input id="admin-user-password" type="password" minlength="6" maxlength="10" pattern="(?=.*[A-Za-z])(?=.*[0-9])[A-Za-z0-9]{6,10}" required placeholder="6 a 10 caracteres" /></label>`
+      : "";
+    editor.innerHTML = `<p class="admin-editor-hint">${isEdit ? "Edita los datos y permisos del usuario. Inactivar conserva su historial y elimina temporalmente el acceso." : "Crea el usuario directamente con su contraseña inicial. La cuenta quedará activa y podrá iniciar sesión inmediatamente."}</p><div class="admin-editor-grid"><label>Usuario<input id="admin-user-username" type="text" maxlength="15" pattern="[A-Za-z0-9]{3,15}" value="${esc(username)}" ${entity === "user" && isEdit ? "readonly" : "required"} /></label>${passwordField}<label>Nombre completo<input id="admin-user-name" required value="${esc(profile.full_name || record?.full_name || "")}" /></label><label>Teléfono<input id="admin-user-phone" value="${esc(profile.phone || record?.phone || "")}" /></label><label>Documento<input id="admin-user-document" value="${esc(profile.document_number || "")}" /></label><label>Rol<select id="admin-user-role">${adminRoleOptions(role)}</select></label><label>Local<select id="admin-user-branch">${adminOptions(data.branches, record?.branch_id)}</select></label><label>Almacén<select id="admin-user-warehouse">${adminOptions(data.warehouses, record?.warehouse_id)}</select></label></div>`;
     return;
   }
   if (entity === "branch") {
@@ -817,6 +820,7 @@ async function submitAdministrationForm(event) {
     if (entity === "user" || entity === "invitation") {
       const input = {
         username: adminFormInput("admin-user-username").toLowerCase(),
+        password: document.getElementById("admin-user-password")?.value || "",
         fullName: adminFormInput("admin-user-name"),
         phone: adminFormInput("admin-user-phone"),
         documentNumber: adminFormInput("admin-user-document"),
@@ -832,7 +836,7 @@ async function submitAdministrationForm(event) {
           const result = await window.DiexSupabase.createAdministrationUser(input);
           await refreshAdministration();
           closeModal();
-          showToast(result.kind === "invitation" ? "Invitación creada. El usuario debe registrarse con ese nombre." : "Usuario agregado correctamente.");
+          showToast(result.kind === "invitation" ? "Invitación creada." : "Usuario creado con su contraseña inicial.");
           return;
         }
         await refreshAdministration();
@@ -960,8 +964,9 @@ async function handleAdministrationAction(event) {
     }
 
     if (action.startsWith("delete-")) {
-      const label = action.includes("user") ? "el acceso del usuario" : action.includes("branch") ? "el local" : action.includes("warehouse") ? "el almacén" : "la invitación";
-      if (!window.confirm(`¿Eliminar ${label}? Esta acción no se puede deshacer.`)) return;
+      const label = action.includes("user") ? "permanentemente el usuario" : action.includes("branch") ? "permanentemente el local" : action.includes("warehouse") ? "permanentemente el almacén" : "la invitación";
+      const warning = action === "delete-user" ? "También se borrará su cuenta de acceso y no podrá iniciar sesión." : "Esta acción no se puede deshacer.";
+      if (!window.confirm(`¿Eliminar ${label}? ${warning}`)) return;
       if (source === "remote") {
         if (action === "delete-user") await window.DiexSupabase.removeAdministrationUser(id);
         if (action === "delete-branch") await window.DiexSupabase.deleteAdministrationBranch(id);

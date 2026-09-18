@@ -21,7 +21,7 @@ La autenticación inicial y el refresco de sesión requieren internet. Mientras 
 
 ## Administración
 
-En el menú Administración, el usuario con rol administrador puede editar los datos de la empresa, crear y editar locales, crear y editar almacenes, y administrar usuarios. Los usuarios existentes se pueden editar, inactivar, reactivar o eliminar del acceso. Para un nombre de usuario que todavía no tiene cuenta, DIEX crea una invitación pendiente; cuando esa persona se registra, el trigger de Supabase le asigna el rol, local y almacén definidos. Supabase conserva un identificador técnico interno, pero la aplicación nunca solicita ni muestra un correo.
+En el menú Administración, el usuario con rol administrador puede editar los datos de la empresa, crear y editar locales, crear y editar almacenes, y administrar usuarios. Al crear un usuario se define su contraseña inicial; la contraseña solo se entrega a Auth y nunca se guarda en tablas de la aplicación. Los usuarios se pueden editar, activar, inactivar o eliminar permanentemente. Supabase conserva un identificador técnico interno, pero la aplicación nunca solicita ni muestra un correo.
 
 ## Incluido en esta fase
 
